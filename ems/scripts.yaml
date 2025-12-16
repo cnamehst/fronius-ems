@@ -1,0 +1,75 @@
+battery_set_power_target:
+  alias: "battery: set power target (W)"
+  mode: single
+  icon: mdi:battery-medium
+  fields:
+    power_w:
+      description: >
+        Signed power in watts.
+        - power_w > 0  → limit discharge to this many watts
+        - power_w < 0  → force charge at this many watts
+        - power_w = 0  → neutral (no cap, no forced charge)
+      example: -1500
+  sequence:
+    - variables:
+        target_w: "{{ power_w | float(0) }}"
+        clamped_w: >
+          {% if target_w > 10000 %}
+            10000
+          {% elif target_w < -10000 %}
+            -10000
+          {% else %}
+            {{ target_w }}
+          {% endif %}
+        scale: 3.84
+        reg40355: >
+          {% set w = clamped_w | float %}
+          {% if w > 0 %}
+            {{ (w / scale) | round(0) }}
+          {% elif w < 0 %}
+            {% set wabs = (0 - w) %}
+            {{ (65536 - (wabs / scale) | round(0)) % 65536 }}
+          {% else %}
+            10000
+          {% endif %}
+    - action: modbus.write_register
+      data:
+        hub: fronius2
+        slave: 1
+        address: 40348
+        value: 2
+    - action: modbus.write_register
+      data:
+        hub: fronius2
+        slave: 1
+        address: 40355
+        value: "{{ reg40355 | int }}"
+    - action: modbus.write_register
+      data:
+        hub: fronius2
+        slave: 1
+        address: 40356
+        value: 10000
+
+battery_reset_charging_5_int:
+  sequence:
+    - data: { slave: 1, address: 40348, value: 0, hub: fronius2 }
+      action: modbus.write_register
+    - data: { slave: 1, address: 40351, value: 0, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40361, slave: 1, value: 1, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40349, slave: 1, value: 0, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40355, slave: 1, value: 10000, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40356, slave: 1, value: 10000, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40356, slave: 1, value: 500, hub: fronius2 }
+      action: modbus.write_register
+    - data: { address: 40350, slave: 1, value: 500, hub: fronius2 }
+      action: modbus.write_register
+  alias: "battery: Reset charging 5% (int)"
+  mode: single
+  icon: mdi:home-battery
+  description: ""

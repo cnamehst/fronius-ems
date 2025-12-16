@@ -1,0 +1,126 @@
+title: EMS - Sensors
+path: ems-sensors
+icon: mdi:flash
+theme: null
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    cards:
+      - type: markdown
+        content: |
+          ## EMS – Sensors
+          Live overview and sanity checks for the EMS.
+
+      - type: entities
+        title: Status
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.cap_enabled
+            name: EMS enabled
+          - entity: input_boolean.cap_nightprice_active
+            name: Nightprice active
+          - entity: input_boolean.grid_cap_mode
+            name: Cap mode active
+          - entity: input_boolean.cap_night_charge_active
+            name: Night charge active
+          - entity: input_select.ems_season
+            name: Season preset
+          - entity: input_boolean.cap_night_never_charge
+            name: Summer mode (never night charge)
+          - entity: input_boolean.cap_manual_override
+            name: Manual override (disable cap)
+
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.ems_phase_sensors_ok
+            state: "off"
+        card:
+          type: markdown
+          content: |
+            ## ⚠️ Phase sensor warning
+            One or more phase current sensors are **unavailable/invalid** (SF sanity protection).
+
+            - This prevents nonsense readings (e.g. -1800A) from polluting automations.
+            - Fuse protection comparisons are skipped until sensors are valid again.
+
+  - type: grid
+    cards:
+      - type: entities
+        title: Live power flow
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ems_grid_power
+            name: Grid power (W)
+          - entity: sensor.ems_pv_power
+            name: PV power (W)
+          - entity: sensor.ems_battery_power
+            name: Battery power (W)
+          - entity: sensor.ems_battery_soc
+            name: Battery SoC (%)
+
+      - type: gauge
+        entity: sensor.ems_battery_soc
+        name: Battery SoC
+        min: 0
+        max: 100
+
+      - type: history-graph
+        title: Power (last 24h)
+        hours_to_show: 24
+        refresh_interval: 30
+        entities:
+          - entity: sensor.ems_grid_power
+            name: Grid
+          - entity: sensor.ems_pv_power
+            name: PV
+          - entity: sensor.ems_battery_power
+            name: Battery
+
+  - type: grid
+    cards:
+      - type: entities
+        title: Phase currents (fuse protection)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ems_grid_current_l1
+            name: L1 current (A)
+          - entity: sensor.ems_grid_current_l2
+            name: L2 current (A)
+          - entity: sensor.ems_grid_current_l3
+            name: L3 current (A)
+          - entity: binary_sensor.ems_phase_sensors_ok
+            name: Phase sensors OK
+
+      - type: history-graph
+        title: Phase currents (last 6h)
+        hours_to_show: 6
+        refresh_interval: 30
+        entities:
+          - entity: sensor.ems_grid_current_l1
+            name: L1
+          - entity: sensor.ems_grid_current_l2
+            name: L2
+          - entity: sensor.ems_grid_current_l3
+            name: L3
+
+      - type: entities
+        title: Energy totals + daily
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ems_grid_import_energy_total
+            name: Grid import total (kWh)
+          - entity: sensor.ems_grid_import_daily_kwh
+            name: Grid import today (kWh)
+          - entity: sensor.ems_pv_energy_total
+            name: PV total (kWh)
+          - entity: sensor.ems_pv_energy_daily_kwh
+            name: PV today (kWh)
+
+      - type: history-graph
+        title: Battery SoC (last 48h)
+        hours_to_show: 48
+        refresh_interval: 60
+        entities:
+          - entity: sensor.ems_battery_soc
+            name: SoC

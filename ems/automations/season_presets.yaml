@@ -1,0 +1,25 @@
+- alias: "EMS: season preset (Winter/Summer)"
+  id: ems_season_preset
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: input_select.ems_season
+  actions:
+    - choose:
+        - conditions: "{{ is_state('input_select.ems_season', 'Summer') }}"
+          sequence:
+            - service: input_boolean.turn_on
+              target: { entity_id: input_boolean.cap_night_never_charge }
+        - conditions: "{{ is_state('input_select.ems_season', 'Winter') }}"
+          sequence:
+            - service: input_boolean.turn_off
+              target: { entity_id: input_boolean.cap_night_never_charge }
+            - service: input_number.set_value
+              target: { entity_id: input_number.cap_night_soc_start_pct }
+              data: { value: 40 }
+            - service: input_number.set_value
+              target: { entity_id: input_number.cap_night_soc_target_pct }
+              data: { value: 60 }
+            - service: input_number.set_value
+              target: { entity_id: input_number.cap_night_charge_power_w }
+              data: { value: 3000 }

@@ -1,0 +1,7 @@
+ems_pv_energy_daily_kwh:
+  source: sensor.ems_pv_energy_total
+  cycle: daily
+
+ems_grid_import_daily_kwh:
+  source: sensor.ems_grid_import_energy_total
+  cycle: daily

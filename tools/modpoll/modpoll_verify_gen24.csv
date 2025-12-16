@@ -1,0 +1,23 @@
+group,name,slave,fc,address,qty,type,description,expected
+telemetry,inv_ac_power_raw,1,4,30072,1,int,"Inverter AC power (raw, needs SF)",Varies with production/consumption; sign depends on model.
+telemetry,inv_ac_power_sf,1,4,30081,1,int,Scale factor for AC power,"Small integer, typically -3..0."
+telemetry,inv_pv_power_raw,1,4,30201,1,int,"PV power (raw, needs SF)",Daytime: >0 W; nighttime: ~0 W.
+telemetry,inv_pv_power_sf,1,4,30247,1,int,Scale factor for PV power,"Small integer, typically -3..0."
+telemetry,gen24_ac_lifetime_energy_raw,1,3,40188,2,uint32,Lifetime AC energy (32-bit),Monotonically increasing over time.
+telemetry,gen24_dc_power_sf,1,3,40257,1,int,Scale factor for DC power,"Small integer, typically -3..0."
+telemetry,gen24_soc_raw,1,3,40310,1,uint,Battery state of charge (SoC),0..100 (%).
+telemetry,gen24_storage_module3_dcw_raw,1,3,40314,1,uint,"Battery DC power (raw, needs DC SF)",Varies; sign depends on charge/discharge convention.
+telemetry,gen24_storage_module4_dcw_raw,1,3,40334,1,uint,"Battery DC power (raw, needs DC SF)",Varies; sign depends on charge/discharge convention.
+control_readback,gen24_batt_mode_40348,1,3,40348,1,uint,Battery operation mode (EMS control),0=normal; 3=EMS limits active; 2=charge-only; 1=discharge-limit-only.
+telemetry,gen24_battery_soc_min_raw,1,3,40350,1,uint,Battery minimum SoC setting,"0..100 (%), often 5..20."
+telemetry,gen24_battery_soc_raw,1,3,40351,1,uint,Battery SoC (alternate),0..100 (%). Should broadly match gen24_soc_raw.
+control_readback,gen24_outwrte_40355,1,3,40355,1,uint,OutWRte max discharge power (W),0 disables discharge/export; typical normal=10000.
+control_readback,gen24_inwrte_40356,1,3,40356,1,uint,InWRte max charge power (W),Typical normal=10000; discharge-disabled mode usually also 10000.
+telemetry,sm_current_l1_raw,200,3,40072,1,int,"Phase L1 current (raw, needs SF)",After scaling: typically 0..40 A.
+telemetry,sm_current_l2_raw,200,3,40073,1,int,"Phase L2 current (raw, needs SF)",After scaling: typically 0..40 A.
+telemetry,sm_current_l3_raw,200,3,40074,1,int,"Phase L3 current (raw, needs SF)",After scaling: typically 0..40 A.
+telemetry,sm_current_sf,200,3,40075,1,int,Scale factor for phase currents,"Small integer, typically -3..0."
+telemetry,sm_power_raw,200,3,40087,1,int,"Grid power (raw, needs SF)",Changes with import/export. After scaling: typically within ~±20 kW.
+telemetry,sm_power_sf,200,3,40091,1,int,Scale factor for grid power,"Small integer, typically -3..0."
+telemetry,sm_totwhimp_raw,200,3,40115,2,uint32,"Total imported energy (raw, needs SF)",Monotonically increasing over time.
+telemetry,sm_totwhimp_sf,200,3,40123,1,int,Scale factor for imported energy,"Small integer, typically -3..0."

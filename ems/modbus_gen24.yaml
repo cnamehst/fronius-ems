@@ -1,0 +1,141 @@
+- type: tcp
+  name: fronius2
+  host: !secret fronius_gen24_host
+  port: 502
+  delay: 0
+  message_wait_milliseconds: 30
+  timeout: 5
+  retries: 3
+  retry_on_empty: true
+  sensors:
+    - name: sm_power_raw
+      slave: 200
+      address: 40087
+      data_type: int16
+      input_type: holding
+      scan_interval: 1
+
+    - name: sm_power_sf
+      slave: 200
+      address: 40091
+      data_type: int16
+      input_type: holding
+      scan_interval: 1
+
+    - name: sm_totwhimp_raw
+      slave: 200
+      address: 40115
+      data_type: uint32
+      input_type: holding
+      scan_interval: 30
+
+    - name: sm_totwhimp_sf
+      slave: 200
+      address: 40123
+      data_type: int16
+      input_type: holding
+      scan_interval: 600
+
+    - name: inv_pv_power_raw
+      slave: 1
+      address: 30201
+      data_type: int16
+      input_type: input
+
+    - name: inv_pv_power_sf
+      slave: 1
+      address: 30247
+      data_type: int16
+      input_type: input
+
+    - name: inv_ac_power_raw
+      slave: 1
+      address: 30072
+      data_type: int16
+      input_type: input
+
+    - name: inv_ac_power_sf
+      slave: 1
+      address: 30081
+      data_type: int16
+      input_type: input
+
+    - name: sm_current_l1_raw
+      slave: 200
+      address: 40072
+      input_type: holding
+      data_type: int16
+      scan_interval: 1
+
+    - name: sm_current_l2_raw
+      slave: 200
+      address: 40073
+      input_type: holding
+      data_type: int16
+      scan_interval: 1
+
+    - name: sm_current_l3_raw
+      slave: 200
+      address: 40074
+      input_type: holding
+      data_type: int16
+      scan_interval: 1
+
+    - name: sm_current_sf
+      slave: 200
+      address: 40075
+      input_type: holding
+      data_type: int16
+      scan_interval: 30
+
+    - name: gen24_storage_module3_dcw_raw
+      slave: 1
+      address: 40314
+      input_type: holding
+      data_type: uint16
+      scan_interval: 2
+
+    - name: gen24_storage_module4_dcw_raw
+      slave: 1
+      address: 40334
+      input_type: holding
+      data_type: uint16
+      scan_interval: 2
+
+    - name: gen24_dc_power_sf
+      slave: 1
+      address: 40257
+      input_type: holding
+      data_type: int16
+      scan_interval: 5
+
+    - name: gen24_soc_raw
+      slave: 1
+      address: 40310
+      input_type: holding
+      data_type: uint16
+      scan_interval: 30
+
+# in your modbus: sensors: list
+    - name: gen24_battery_soc_min_raw
+      slave: 1
+      address: 40350
+      input_type: holding
+      data_type: uint16
+      scan_interval: 60
+
+    - name: gen24_battery_soc_raw
+      slave: 1
+      address: 40351
+      input_type: holding
+      data_type: uint16
+      scan_interval: 30
+
+    - name: gen24_ac_lifetime_energy_raw
+      slave: 1
+      address: 40188
+      input_type: holding
+      data_type: custom
+      count: 2
+      structure: ">L"
+      scan_interval: 60

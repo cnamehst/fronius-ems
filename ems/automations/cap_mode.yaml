@@ -1,0 +1,59 @@
+- alias: "EMS: grid cap mode state (SoC hysteresis, dayprice only)"
+  id: ems_cap_mode_state
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id:
+        - sensor.ems_battery_soc
+        - input_boolean.cap_nightprice_active
+        - input_boolean.grid_cap_mode
+        - input_boolean.cap_enabled
+        - input_boolean.cap_manual_override
+  actions:
+    - variables:
+        soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+        start_pct: "{{ states('input_number.cap_soc_start_pct') | float(0) }}"
+        reset_pct: "{{ states('input_number.cap_soc_stop_reset_pct') | float(0) }}"
+        cap_on: "{{ is_state('input_boolean.grid_cap_mode', 'on') }}"
+        nightprice: "{{ is_state('input_boolean.cap_nightprice_active', 'on') }}"
+        dayprice_active: "{{ not nightprice }}"
+        enabled: "{{ is_state('input_boolean.cap_enabled', 'on') }}"
+        override: "{{ is_state('input_boolean.cap_manual_override', 'on') }}"
+    - choose:
+        - conditions: >
+            {{ enabled and not override and not cap_on and dayprice_active and soc < start_pct }}
+          sequence:
+            - service: input_boolean.turn_on
+              target: { entity_id: input_boolean.grid_cap_mode }
+
+        - conditions: >
+            {{ cap_on and (soc > reset_pct or not dayprice_active or not enabled or override) }}
+          sequence:
+            - service: input_boolean.turn_off
+              target: { entity_id: input_boolean.grid_cap_mode }
+
+- alias: "EMS: cap controller (keep grid import at target)"
+  id: ems_cap_controller
+  mode: restart
+  triggers:
+    - trigger: time_pattern
+      seconds: "/5"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.grid_cap_mode
+      state: "on"
+  actions:
+    - variables:
+        p_grid: "{{ states('sensor.ems_grid_power') | float(0) }}"
+        target: "{{ states('input_number.cap_import_target_w') | float(0) }}"
+    - variables:
+        error: "{{ target - p_grid }}"
+        desired_batt: >
+          {% set raw = error %}
+          {% if raw > 5000 %} 5000
+          {% elif raw < -5000 %} -5000
+          {% else %} {{ raw }}
+          {% endif %}
+    - service: script.battery_set_power_target
+      data:
+        power_w: "{{ desired_batt }}"

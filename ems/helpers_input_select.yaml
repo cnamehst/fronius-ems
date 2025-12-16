@@ -1,0 +1,7 @@
+ems_season:
+  name: "EMS: season preset"
+  icon: mdi:calendar-season
+  options:
+    - Winter
+    - Summer
+  initial: Winter

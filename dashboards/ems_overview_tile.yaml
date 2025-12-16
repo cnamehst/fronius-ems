@@ -1,0 +1,18 @@
+type: entities
+title: EMS
+show_header_toggle: false
+entities:
+  - entity: input_boolean.cap_enabled
+    name: Enabled
+  - entity: input_boolean.cap_nightprice_active
+    name: Nightprice
+  - entity: input_boolean.grid_cap_mode
+    name: Cap mode
+  - entity: input_boolean.cap_night_charge_active
+    name: Night charge
+  - entity: input_select.ems_season
+    name: Season
+  - entity: sensor.ems_battery_soc
+    name: Battery SoC
+  - entity: sensor.ems_grid_power
+    name: Grid power

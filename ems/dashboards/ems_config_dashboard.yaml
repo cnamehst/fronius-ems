@@ -1,0 +1,111 @@
+title: EMS - Configuration
+path: ems-config
+icon: mdi:tune
+theme: null
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    cards:
+      - type: markdown
+        content: |
+          ## EMS – Configuration
+          Tune thresholds and behavior.  
+          Day/night tariff switching is controlled by: `input_boolean.cap_nightprice_active`
+
+      - type: entities
+        title: Global controls
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.cap_enabled
+            name: EMS enabled
+          - entity: input_boolean.cap_manual_override
+            name: Manual override (disable cap)
+          - entity: input_boolean.cap_nightprice_active
+            name: Nightprice active (test toggle)
+          - entity: input_boolean.grid_cap_mode
+            name: Cap mode active (read-only)
+
+      - type: entities
+        title: Day / cap mode tuning
+        show_header_toggle: false
+        entities:
+          - entity: input_number.cap_soc_start_pct
+            name: SoC start cap (%)
+          - entity: input_number.cap_soc_stop_reset_pct
+            name: SoC stop/reset cap (%)
+          - entity: input_number.cap_import_target_w
+            name: Import target (W)
+
+      - type: history-graph
+        title: Day tuning context (last 12h)
+        hours_to_show: 12
+        refresh_interval: 60
+        entities:
+          - entity: sensor.ems_grid_power
+            name: Grid
+          - entity: sensor.ems_battery_soc
+            name: SoC
+
+  - type: grid
+    cards:
+      - type: entities
+        title: Night charging (winter logic)
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.cap_night_never_charge
+            name: Summer mode (never night charge)
+          - entity: input_boolean.cap_night_charge_active
+            name: Night charge active (read-only)
+          - entity: input_number.cap_night_soc_start_pct
+            name: Winter threshold at night start (%)
+          - entity: input_number.cap_night_soc_target_pct
+            name: Night charge target (%)
+          - entity: input_number.cap_night_charge_power_w
+            name: Night charge power (W)
+
+      - type: history-graph
+        title: Night charging context (last 24h)
+        hours_to_show: 24
+        refresh_interval: 60
+        entities:
+          - entity: sensor.ems_battery_soc
+            name: SoC
+          - entity: sensor.ems_grid_power
+            name: Grid
+
+  - type: grid
+    cards:
+      - type: entities
+        title: Fuse protection / limits (night)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.cap_night_max_power_w
+            name: Max grid import (W)
+          - entity: input_number.cap_night_max_phase_a
+            name: Max phase current (A)
+          - entity: sensor.ems_grid_current_l1
+            name: L1 current
+          - entity: sensor.ems_grid_current_l2
+            name: L2 current
+          - entity: sensor.ems_grid_current_l3
+            name: L3 current
+
+      - type: button
+        name: Reset battery to automatic
+        icon: mdi:home-battery
+        tap_action:
+          action: call-service
+          service: script.battery_reset_charging_5_int
+
+      - type: history-graph
+        title: Fuse protection context (last 6h)
+        hours_to_show: 6
+        refresh_interval: 30
+        entities:
+          - entity: sensor.ems_grid_current_l1
+            name: L1
+          - entity: sensor.ems_grid_current_l2
+            name: L2
+          - entity: sensor.ems_grid_current_l3
+            name: L3

@@ -1,0 +1,29 @@
+cap_enabled:
+  name: "EMS: enabled"
+  icon: mdi:flash-auto
+  initial: true
+
+cap_nightprice_active:
+  name: "EMS: nightprice active"
+  icon: mdi:weather-night
+  initial: false
+
+cap_manual_override:
+  name: "EMS: manual override (disable cap mode)"
+  icon: mdi:account-cancel-outline
+  initial: false
+
+cap_night_never_charge:
+  name: "EMS: never charge during night (summer mode)"
+  icon: mdi:weather-sunny-off
+  initial: false
+
+cap_night_charge_active:
+  name: "EMS: night charge active this night"
+  icon: mdi:battery-clock
+  initial: false
+
+grid_cap_mode:
+  name: "EMS: grid cap mode active"
+  icon: mdi:flash
+  initial: false
