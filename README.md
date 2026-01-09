@@ -5,22 +5,53 @@ This repository implements a **deterministic, battery-aware Energy Management Sy
 House **#1** is the playground.  
 House **#2 / #3** reuse the same logic with different parameters.
 
+---
+
 ## What this EMS is trying to accomplish
 
 ### Dayprice: self-consumption & peak shaving (“cap mode”)
 During **dayprice**, we prefer to run the house on battery as much as possible. When battery SoC drops below a threshold, we enter **cap mode** and dynamically set a battery power target to keep grid import near a configured target (e.g. 3 kW). Cap mode exits via hysteresis once SoC recovers.
 
 ### Nightprice: controlled charging (optional)
-During **nightprice**, the EMS may charge the battery from the grid if it started the night sufficiently low. Charging is season-aware, capped by power limits, and phase-safe.
+During **nightprice**, the EMS may charge the battery from the grid if it started the night sufficiently low. Charging is season-aware (“winter logic”), capped by power limits, and phase-safe.
 
 ### Night safety: protect fuses and phases
-At night, EMS continuously monitors total import and per-phase currents. If limits are exceeded, forced charging is reduced/stopped and battery discharge/export can be disabled **via Modbus control registers** instead of using `power_w: 0`.
+At night, EMS continuously monitors **total import** and **per-phase currents**. If limits are exceeded, forced charging is reduced/stopped and battery discharge/export can be disabled **via Modbus control registers**.
+
+---
 
 ## Core design principles
 
-1. **EMS owns the battery explicitly** when active (no hidden defaults).
-2. **Never use `power_w: 0` as neutral** in this system: it can hand control back to inverter EMS and cause unintended battery export.
-3. **GEN24 “allows”, battery decides**: the BYD BMS enforces real physical limits (model, modules, temp, SoC).
+1. **Raw Modbus = plumbing.** Not for dashboards. Not for statistics. Not for Energy.
+2. **EMS sensors = products.** Validated, stable, suitable for dashboards and Energy.
+3. **EMS owns the battery explicitly** when active (no hidden defaults).
+4. **Avoid handing control back implicitly.** When the EMS is responsible, it should stay responsible.
+5. **BYD BMS is final authority.** The inverter can “allow”, but the battery decides actual limits.
+
+---
+
+## Performance & stability (IMPORTANT)
+
+Home Assistant can become slow if you:
+- poll lots of Modbus sensors at 1s
+- record raw sensors in the database
+- produce long-term statistics from noisy/raw sensors
+
+### The EMS approach
+- Raw Modbus sensors are polled at a reasonable cadence (typically **5s**; slower where appropriate).
+- Raw sensors are excluded from recorder.
+- EMS template sensors are **time-triggered** to reduce CPU churn and database writes.
+
+### Update cadence used by EMS template sensors
+| Category | Examples | Cadence |
+|---|---|---|
+| Power + phase currents | EMS Grid Power, EMS PV Power, EMS Battery Power, EMS Grid Current L1/L2/L3 | Every **5s** |
+| Battery SoC | EMS Battery SoC, EMS Battery SoC Minimum | Every **30s** |
+| Energy totals | EMS Grid Import Energy Total, EMS PV Energy Total | Every **60s** |
+
+> Tip: Use only `sensor.ems_*` in dashboards and automations. Keep raw sensors as internal plumbing.
+
+---
 
 ## Battery control registers (EMS-owned writes)
 
@@ -29,11 +60,10 @@ These are the only registers the EMS should write to for hard battery behavior c
 | Address | Name (EMS) | Unit | Purpose |
 |---:|---|---|---|
 | 40348 | Battery operation mode | enum | Selects inverter vs EMS limit modes |
-| 40355 | OutWRte | W | Max discharge power (0 disables discharge/export) |
-| 40356 | InWRte | W | Max charge power |
+| 40355 | OutWRte | reg | Max discharge power limit (register encoding) |
+| 40356 | InWRte | reg | Max charge power limit (register encoding) |
 
 ### 40348 operation mode semantics
-
 | Value | Meaning |
 |---:|---|
 | 0 | Normal/default: inverter manages charging/discharging automatically |
@@ -48,38 +78,3 @@ These are the only registers the EMS should write to for hard battery behavior c
 40348 = 0
 40355 = 10000
 40356 = 10000
-```
-
-**Discharge disabled (allow charge, no export)**
-```text
-40348 = 3
-40355 = 0
-40356 = 10000
-```
-
-> **Battery-pack nuance (informational):** GEN24 can allow 10 kW, but the BYD pack may cap below that depending on model and module count. No EMS config changes are required — the BMS enforces physical limits.
-
-## Modbus register tables
-
-- Auto-generated register tables are in **`docs/registers.md`**.
-
-## Repo layout
-
-```
-ems/
-  modbus_gen24.yaml
-  template_sensors.yaml
-  scripts.yaml
-  automations/
-dashboards/
-  ...
-docs/
-  registers.md
-```
-
-## Philosophy (tl;dr)
-
-- Registers over magic
-- EMS stays in control when active
-- Battery BMS is the final authority
-- Document everything (house #1 is the lab)

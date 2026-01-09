@@ -13,14 +13,14 @@
       address: 40087
       data_type: int16
       input_type: holding
-      scan_interval: 1
+      scan_interval: 5
 
     - name: sm_power_sf
       slave: 200
       address: 40091
       data_type: int16
       input_type: holding
-      scan_interval: 1
+      scan_interval: 10
 
     - name: sm_totwhimp_raw
       slave: 200
@@ -65,21 +65,21 @@
       address: 40072
       input_type: holding
       data_type: int16
-      scan_interval: 1
+      scan_interval: 5
 
     - name: sm_current_l2_raw
       slave: 200
       address: 40073
       input_type: holding
       data_type: int16
-      scan_interval: 1
+      scan_interval: 5
 
     - name: sm_current_l3_raw
       slave: 200
       address: 40074
       input_type: holding
       data_type: int16
-      scan_interval: 1
+      scan_interval: 5
 
     - name: sm_current_sf
       slave: 200
@@ -93,14 +93,14 @@
       address: 40314
       input_type: holding
       data_type: uint16
-      scan_interval: 2
+      scan_interval: 5
 
     - name: gen24_storage_module4_dcw_raw
       slave: 1
       address: 40334
       input_type: holding
       data_type: uint16
-      scan_interval: 2
+      scan_interval: 5
 
     - name: gen24_dc_power_sf
       slave: 1

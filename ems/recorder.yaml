@@ -1,0 +1,14 @@
+recorder:
+  purge_keep_days: 14
+  commit_interval: 30
+  exclude:
+    entity_globs:
+      - sensor.sm_*_raw
+      - sensor.sm_*_sf
+      - sensor.gen24_*_raw
+      - sensor.reg*
+      - sensor.reading_battery_settings_*
+    domains:
+      - automation
+      - script
+      - updater
