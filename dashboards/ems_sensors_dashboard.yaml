@@ -18,31 +18,31 @@ sections:
         entities:
           - entity: input_boolean.cap_enabled
             name: EMS enabled
-          - entity: input_boolean.cap_nightprice_active
-            name: Nightprice active
           - entity: input_boolean.grid_cap_mode
             name: Cap mode active
           - entity: input_boolean.cap_night_charge_active
             name: Night charge active
-          - entity: input_select.ems_season
-            name: Season preset
           - entity: input_boolean.cap_night_never_charge
             name: Summer mode (never night charge)
           - entity: input_boolean.cap_manual_override
             name: Manual override (disable cap)
-
-      - type: conditional
-        conditions:
           - entity: binary_sensor.ems_phase_sensors_ok
-            state: "off"
-        card:
-          type: markdown
-          content: |
-            ## ⚠️ Phase sensor warning
-            One or more phase current sensors are **unavailable/invalid** (SF sanity protection).
+            name: Phase sensors OK
 
-            - This prevents nonsense readings (e.g. -1800A) from polluting automations.
-            - Fuse protection comparisons are skipped until sensors are valid again.
+      - type: entities
+        title: Tariff
+        show_header_toggle: false
+        entities:
+          - entity: input_select.tariff_mode
+            name: Tariff mode
+          - entity: input_datetime.tariff_day_start
+            name: Day starts
+          - entity: input_datetime.tariff_day_end
+            name: Day ends
+          - entity: binary_sensor.electricity_dayprice_active
+            name: Dayprice active
+          - entity: binary_sensor.electricity_nightprice_active
+            name: Nightprice active
 
   - type: grid
     cards:

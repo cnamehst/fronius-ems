@@ -1,0 +1,12 @@
+tariff_day_start:
+  name: Tariff: day starts
+  has_date: false
+  has_time: true
+  initial: "06:00:00"
+
+tariff_day_end:
+  name: Tariff: day ends
+  has_date: false
+  has_time: true
+  initial: "23:00:00"
+

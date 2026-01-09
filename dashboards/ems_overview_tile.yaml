@@ -2,17 +2,36 @@ type: entities
 title: EMS
 show_header_toggle: false
 entities:
+  # Core EMS state
   - entity: input_boolean.cap_enabled
-    name: Enabled
-  - entity: input_boolean.cap_nightprice_active
-    name: Nightprice
+    name: EMS enabled
   - entity: input_boolean.grid_cap_mode
-    name: Cap mode
+    name: Cap mode active
   - entity: input_boolean.cap_night_charge_active
-    name: Night charge
-  - entity: input_select.ems_season
-    name: Season
+    name: Night charge active
+  - entity: input_boolean.cap_night_never_charge
+    name: Summer mode (never night charge)
+  - entity: input_boolean.cap_manual_override
+    name: Manual override (disable cap)
+
+  # Tariff controls + status (new source of truth)
+  - entity: input_select.tariff_mode
+    name: Tariff mode
+  - entity: input_datetime.tariff_day_start
+    name: Day starts
+  - entity: input_datetime.tariff_day_end
+    name: Day ends
+  - entity: binary_sensor.electricity_dayprice_active
+    name: Dayprice active
+  - entity: binary_sensor.electricity_nightprice_active
+    name: Nightprice active
+
+  # Health / safety signals
+  - entity: binary_sensor.ems_phase_sensors_ok
+    name: Phase sensors OK
+
+  # Quick numbers
   - entity: sensor.ems_battery_soc
-    name: Battery SoC
+    name: Battery SoC (%)
   - entity: sensor.ems_grid_power
-    name: Grid power
+    name: Grid power (W)

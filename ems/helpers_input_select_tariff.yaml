@@ -1,0 +1,9 @@
+tariff_mode:
+  name: Tariff mode
+  options:
+    - Auto
+    - Force dayprice
+    - Force nightprice
+  initial: Auto
+  icon: mdi:calendar-clock
+

@@ -1,59 +1,79 @@
 - alias: "EMS: grid cap mode state (SoC hysteresis, dayprice only)"
   id: ems_cap_mode_state
   mode: single
-  triggers:
-    - trigger: state
+  trigger:
+    - platform: state
       entity_id:
         - sensor.ems_battery_soc
-        - input_boolean.cap_nightprice_active
+        - binary_sensor.electricity_dayprice_active
         - input_boolean.grid_cap_mode
         - input_boolean.cap_enabled
         - input_boolean.cap_manual_override
-  actions:
+  action:
     - variables:
-        soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+        soc: "{{ states('sensor.ems_battery_soc') | float(none) }}"
         start_pct: "{{ states('input_number.cap_soc_start_pct') | float(0) }}"
         reset_pct: "{{ states('input_number.cap_soc_stop_reset_pct') | float(0) }}"
         cap_on: "{{ is_state('input_boolean.grid_cap_mode', 'on') }}"
-        nightprice: "{{ is_state('input_boolean.cap_nightprice_active', 'on') }}"
-        dayprice_active: "{{ not nightprice }}"
+        dayprice: "{{ is_state('binary_sensor.electricity_dayprice_active', 'on') }}"
         enabled: "{{ is_state('input_boolean.cap_enabled', 'on') }}"
         override: "{{ is_state('input_boolean.cap_manual_override', 'on') }}"
     - choose:
+        # Turn cap ON
         - conditions: >
-            {{ enabled and not override and not cap_on and dayprice_active and soc < start_pct }}
+            {{ enabled
+               and not override
+               and not cap_on
+               and dayprice
+               and soc is not none
+               and soc < start_pct }}
           sequence:
             - service: input_boolean.turn_on
-              target: { entity_id: input_boolean.grid_cap_mode }
+              target:
+                entity_id: input_boolean.grid_cap_mode
 
+        # Turn cap OFF
         - conditions: >
-            {{ cap_on and (soc > reset_pct or not dayprice_active or not enabled or override) }}
+            {{ cap_on and (
+                 soc is not none and soc > reset_pct
+                 or not dayprice
+                 or not enabled
+                 or override
+            ) }}
           sequence:
             - service: input_boolean.turn_off
-              target: { entity_id: input_boolean.grid_cap_mode }
+              target:
+                entity_id: input_boolean.grid_cap_mode
 
 - alias: "EMS: cap controller (keep grid import at target)"
   id: ems_cap_controller
   mode: restart
-  triggers:
-    - trigger: time_pattern
+  trigger:
+    - platform: time_pattern
       seconds: "/5"
-  conditions:
+  condition:
     - condition: state
       entity_id: input_boolean.grid_cap_mode
       state: "on"
-  actions:
+  action:
     - variables:
-        p_grid: "{{ states('sensor.ems_grid_power') | float(0) }}"
+        p_grid: "{{ states('sensor.ems_grid_power') | float(none) }}"
         target: "{{ states('input_number.cap_import_target_w') | float(0) }}"
-    - variables:
-        error: "{{ target - p_grid }}"
-        desired_batt: >
-          {% set raw = error %}
-          {% if raw > 5000 %} 5000
-          {% elif raw < -5000 %} -5000
-          {% else %} {{ raw }}
-          {% endif %}
-    - service: script.battery_set_power_target
-      data:
-        power_w: "{{ desired_batt }}"
+    - choose:
+        - conditions: "{{ p_grid is not none }}"
+          sequence:
+            - variables:
+                error: "{{ target - p_grid }}"
+                desired_batt: >
+                  {% if error > 5000 %} 5000
+                  {% elif error < -5000 %} -5000
+                  {% else %} {{ error }}
+                  {% endif %}
+            - service: script.battery_set_power_target
+              data:
+                power_w: "{{ desired_batt }}"
+      default:
+        # If grid power is unknown, stop interfering
+        - service: script.battery_set_power_target
+          data:
+            power_w: 0

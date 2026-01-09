@@ -10,8 +10,27 @@ sections:
       - type: markdown
         content: |
           ## EMS – Configuration
-          Tune thresholds and behavior.  
-          Day/night tariff switching is controlled by: `input_boolean.cap_nightprice_active`
+          Tune thresholds and behavior.
+
+          **Tariff source of truth**
+          - Set **day start/end** below.
+          - `Tariff mode` can override (Force day / Force night).
+          - EMS reads `binary_sensor.electricity_dayprice_active` / `binary_sensor.electricity_nightprice_active`.
+
+      - type: entities
+        title: Tariff (GUI-configurable)
+        show_header_toggle: false
+        entities:
+          - entity: input_select.tariff_mode
+            name: Tariff mode
+          - entity: input_datetime.tariff_day_start
+            name: Day starts
+          - entity: input_datetime.tariff_day_end
+            name: Day ends
+          - entity: binary_sensor.electricity_dayprice_active
+            name: Dayprice active
+          - entity: binary_sensor.electricity_nightprice_active
+            name: Nightprice active
 
       - type: entities
         title: Global controls
@@ -21,8 +40,6 @@ sections:
             name: EMS enabled
           - entity: input_boolean.cap_manual_override
             name: Manual override (disable cap)
-          - entity: input_boolean.cap_nightprice_active
-            name: Nightprice active (test toggle)
           - entity: input_boolean.grid_cap_mode
             name: Cap mode active (read-only)
 
@@ -50,20 +67,13 @@ sections:
   - type: grid
     cards:
       - type: entities
-        title: Season preset
+        title: Night charging (winter logic)
         show_header_toggle: false
         entities:
-          - entity: input_select.ems_season
-            name: EMS season
           - entity: input_boolean.cap_night_never_charge
             name: Summer mode (never night charge)
           - entity: input_boolean.cap_night_charge_active
             name: Night charge active (read-only)
-
-      - type: entities
-        title: Night charging (winter logic)
-        show_header_toggle: false
-        entities:
           - entity: input_number.cap_night_soc_start_pct
             name: Winter threshold at night start (%)
           - entity: input_number.cap_night_soc_target_pct

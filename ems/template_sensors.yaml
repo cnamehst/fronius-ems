@@ -6,276 +6,305 @@
 # - EMS sensors are stable/validated and suitable for dashboards + Energy.
 # - Update cadence is controlled via triggers to reduce CPU/DB load.
 
-template:
 
-  ##########################################################################
-  # FAST EMS SENSORS (every 5 seconds): Power + Phase currents
-  ##########################################################################
-  - trigger:
-      - platform: time_pattern
-        seconds: "/5"
-    sensor:
-      # -----------------------------
-      # EMS Grid Power (W)
-      # -----------------------------
-      - name: "EMS Grid Power"
-        unique_id: ems_grid_power_w
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        variables:
-          raw: "{{ states('sensor.sm_power_raw') | float(none) }}"
-          sf:  "{{ states('sensor.sm_power_sf')  | int(none) }}"
-          watts: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
-            {% else %}
-              {{ raw * (10 ** sf) }}
-            {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -3 and sf <= 0
-               and watts is not none
-               and (watts | abs) <= 40000 }}
-        availability: "{{ valid }}"
-        state: "{{ watts | round(0) }}"
+##########################################################################
+# FAST EMS SENSORS (every 5 seconds): Power + Phase currents
+##########################################################################
+- trigger:
+    - platform: time_pattern
+      seconds: "/5"
+  sensor:
+    # -----------------------------
+    # EMS Grid Power (W)
+    # -----------------------------
+    - name: "EMS Grid Power"
+      unique_id: ems_grid_power_w
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      variables:
+        raw: "{{ states('sensor.sm_power_raw') | float(none) }}"
+        sf:  "{{ states('sensor.sm_power_sf')  | int(none) }}"
+        watts: >-
+          {% if raw is none or sf is none %}
+            {{ none }}
+          {% else %}
+            {{ raw * (10 ** sf) }}
+          {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -3 and sf <= 0
+              and watts is not none
+              and (watts | abs) <= 40000 }}
+      availability: "{{ valid }}"
+      state: "{{ watts | round(0) }}"
 
-      # -----------------------------
-      # EMS PV Power (W)
-      # -----------------------------
-      - name: "EMS PV Power"
-        unique_id: ems_pv_power_w
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        variables:
-          raw: "{{ states('sensor.inv_pv_power_raw') | float(none) }}"
-          sf:  "{{ states('sensor.inv_pv_power_sf')  | int(none) }}"
-          watts: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
-            {% else %}
-              {{ raw * (10 ** sf) }}
-            {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -3 and sf <= 0
-               and watts is not none
-               and (watts | abs) <= 40000 }}
-        availability: "{{ valid }}"
-        state: "{{ watts | round(0) }}"
+    # -----------------------------
+    # EMS PV Power (W)
+    # -----------------------------
+    - name: "EMS PV Power"
+      unique_id: ems_pv_power_w
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      variables:
+        raw: "{{ states('sensor.inv_pv_power_raw') | float(none) }}"
+        sf:  "{{ states('sensor.inv_pv_power_sf')  | int(none) }}"
+        watts: >-
+          {% if raw is none or sf is none %}
+            {{ none }}
+          {% else %}
+            {{ raw * (10 ** sf) }}
+          {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -3 and sf <= 0
+              and watts is not none
+              and (watts | abs) <= 40000 }}
+      availability: "{{ valid }}"
+      state: "{{ watts | round(0) }}"
 
-      # -----------------------------
-      # EMS Battery Power (W)
-      # Positive/negative sign depends on Fronius semantics; keep as reported.
-      # Uses storage module DCW + SF.
-      # -----------------------------
-      - name: "EMS Battery Power"
-        unique_id: ems_battery_power_w
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        variables:
-          sf: "{{ states('sensor.gen24_dc_power_sf') | int(none) }}"
-          r3u: "{{ states('sensor.gen24_storage_module3_dcw_raw') | int(none) }}"
-          r4u: "{{ states('sensor.gen24_storage_module4_dcw_raw') | int(none) }}"
-          valid: >-
-            {{ sf is not none
-               and r3u is not none
-               and r4u is not none
-               and sf >= -3 and sf <= 0 }}
-          watts: >-
-            {% if not valid %}
-              {{ none }}
-            {% else %}
-              {% set r3 = r3u %}
-              {% set r4 = r4u %}
-              {# convert uint16 to signed int16 #}
-              {% if r3 > 32767 %}{% set r3 = r3 - 65536 %}{% endif %}
-              {% if r4 > 32767 %}{% set r4 = r4 - 65536 %}{% endif %}
-              {{ (r3 + r4) * (10 ** sf) }}
-            {% endif %}
-        availability: "{{ valid and watts is not none and (watts | abs) <= 40000 }}"
-        state: "{{ watts | round(0) }}"
-
-      # -----------------------------
-      # EMS Grid Phase Currents (A)
-      # Clamp SF range and plausible amps range.
-      # -----------------------------
-      - name: "EMS Grid Current L1"
-        unique_id: ems_grid_current_l1
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        variables:
-          raw: "{{ states('sensor.sm_current_l1_raw') | int(none) }}"
-          sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
-          amps: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
-            {% else %}
-              {{ raw * (10 ** sf) }}
-            {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -3 and sf <= 0
-               and amps is not none
-               and (amps | abs) <= 40 }}
-        availability: "{{ valid }}"
-        state: "{{ amps | round(2) }}"
-
-      - name: "EMS Grid Current L2"
-        unique_id: ems_grid_current_l2
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        variables:
-          raw: "{{ states('sensor.sm_current_l2_raw') | int(none) }}"
-          sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
-          amps: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
-            {% else %}
-              {{ raw * (10 ** sf) }}
-            {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -3 and sf <= 0
-               and amps is not none
-               and (amps | abs) <= 40 }}
-        availability: "{{ valid }}"
-        state: "{{ amps | round(2) }}"
-
-      - name: "EMS Grid Current L3"
-        unique_id: ems_grid_current_l3
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        variables:
-          raw: "{{ states('sensor.sm_current_l3_raw') | int(none) }}"
-          sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
-          amps: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
-            {% else %}
-              {{ raw * (10 ** sf) }}
-            {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -3 and sf <= 0
-               and amps is not none
-               and (amps | abs) <= 40 }}
-        availability: "{{ valid }}"
-        state: "{{ amps | round(2) }}"
-
-
-  ##########################################################################
-  # SOC SENSORS (every 30 seconds): Battery SoC and reserve minimum
-  ##########################################################################
-  - trigger:
-      - platform: time_pattern
-        seconds: "/30"
-    sensor:
-      - name: "EMS Battery SoC"
-        unique_id: ems_battery_soc
-        unit_of_measurement: "%"
-        device_class: battery
-        state_class: measurement
-        variables:
-          v: "{{ states('sensor.gen24_battery_soc_raw') | int(none) }}"
-          valid: "{{ v is not none and 0 <= v <= 10000 }}"
-        availability: "{{ valid }}"
-        state: >
+    # -----------------------------
+    # EMS Battery Power (W)
+    # Positive/negative sign depends on Fronius semantics; keep as reported.
+    # Uses storage module DCW + SF.
+    # -----------------------------
+    - name: "EMS Battery Power"
+      unique_id: ems_battery_power_w
+      unit_of_measurement: "W"
+      device_class: power
+      state_class: measurement
+      variables:
+        sf: "{{ states('sensor.gen24_dc_power_sf') | int(none) }}"
+        r3u: "{{ states('sensor.gen24_storage_module3_dcw_raw') | int(none) }}"
+        r4u: "{{ states('sensor.gen24_storage_module4_dcw_raw') | int(none) }}"
+        valid: >-
+          {{ sf is not none
+              and r3u is not none
+              and r4u is not none
+              and sf >= -3 and sf <= 0 }}
+        watts: >-
           {% if not valid %}
             {{ none }}
           {% else %}
-            {{ (v / 100) | round(1) }}
+            {% set r3 = r3u %}
+            {% set r4 = r4u %}
+            {# convert uint16 to signed int16 #}
+            {% if r3 > 32767 %}{% set r3 = r3 - 65536 %}{% endif %}
+            {% if r4 > 32767 %}{% set r4 = r4 - 65536 %}{% endif %}
+            {{ (r3 + r4) * (10 ** sf) }}
           {% endif %}
+      availability: "{{ valid and watts is not none and (watts | abs) <= 40000 }}"
+      state: "{{ watts | round(0) }}"
 
-      - name: "EMS Battery SoC Minimum"
-        unique_id: ems_battery_soc_min
-        unit_of_measurement: "%"
-        device_class: battery
-        state_class: measurement
-        variables:
-          v: "{{ states('sensor.gen24_battery_soc_min_raw') | int(none) }}"
-          valid: "{{ v is not none and 0 <= v <= 10000 }}"
-        availability: "{{ valid }}"
-        state: >
-          {% if not valid %}
+    # -----------------------------
+    # EMS Grid Phase Currents (A)
+    # Clamp SF range and plausible amps range.
+    # -----------------------------
+    - name: "EMS Grid Current L1"
+      unique_id: ems_grid_current_l1
+      unit_of_measurement: "A"
+      device_class: current
+      state_class: measurement
+      variables:
+        raw: "{{ states('sensor.sm_current_l1_raw') | int(none) }}"
+        sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
+        amps: >-
+          {% if raw is none or sf is none %}
             {{ none }}
           {% else %}
-            {{ (v / 100) | round(1) }}
+            {{ raw * (10 ** sf) }}
           {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -4 and sf <= 0
+              and amps is not none
+              and (amps | abs) <= 40 }}
+      availability: "{{ valid }}"
+      state: "{{ amps | round(2) }}"
+
+    - name: "EMS Grid Current L2"
+      unique_id: ems_grid_current_l2
+      unit_of_measurement: "A"
+      device_class: current
+      state_class: measurement
+      variables:
+        raw: "{{ states('sensor.sm_current_l2_raw') | int(none) }}"
+        sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
+        amps: >-
+          {% if raw is none or sf is none %}
+            {{ none }}
+          {% else %}
+            {{ raw * (10 ** sf) }}
+          {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -4 and sf <= 0
+              and amps is not none
+              and (amps | abs) <= 40 }}
+      availability: "{{ valid }}"
+      state: "{{ amps | round(2) }}"
+
+    - name: "EMS Grid Current L3"
+      unique_id: ems_grid_current_l3
+      unit_of_measurement: "A"
+      device_class: current
+      state_class: measurement
+      variables:
+        raw: "{{ states('sensor.sm_current_l3_raw') | int(none) }}"
+        sf:  "{{ states('sensor.sm_current_sf')     | int(none) }}"
+        amps: >-
+          {% if raw is none or sf is none %}
+            {{ none }}
+          {% else %}
+            {{ raw * (10 ** sf) }}
+          {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -4 and sf <= 0
+              and amps is not none
+              and (amps | abs) <= 40 }}
+      availability: "{{ valid }}"
+      state: "{{ amps | round(2) }}"
 
 
-  ##########################################################################
-  # ENERGY TOTALS (every 60 seconds): Energy dashboard compatible sensors
-  ##########################################################################
-  - trigger:
-      - platform: time_pattern
-        seconds: "/60"
-    sensor:
-      - name: "EMS Grid Import Energy Total"
-        unique_id: ems_grid_import_energy_total_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        variables:
-          raw: "{{ states('sensor.sm_totwhimp_raw') | float(none) }}"
-          sf:  "{{ states('sensor.sm_totwhimp_sf')  | int(none) }}"
-          wh: >-
-            {% if raw is none or sf is none %}
-              {{ none }}
+##########################################################################
+# SOC SENSORS (every 30 seconds): Battery SoC and reserve minimum
+##########################################################################
+- trigger:
+    - platform: time_pattern
+      seconds: "/30"
+  sensor:
+    - name: "EMS Battery SoC"
+      unique_id: ems_battery_soc
+      unit_of_measurement: "%"
+      device_class: battery
+      state_class: measurement
+      variables:
+        v: "{{ states('sensor.gen24_battery_soc_raw') | int(none) }}"
+        valid: "{{ v is not none and 0 <= v <= 10000 }}"
+      availability: "{{ valid }}"
+      state: >
+        {% if not valid %}
+          {{ none }}
+        {% else %}
+          {{ (v / 100) | round(1) }}
+        {% endif %}
+
+    - name: "EMS Battery SoC Minimum"
+      unique_id: ems_battery_soc_min
+      unit_of_measurement: "%"
+      device_class: battery
+      state_class: measurement
+      variables:
+        v: "{{ states('sensor.gen24_battery_soc_min_raw') | int(none) }}"
+        valid: "{{ v is not none and 0 <= v <= 10000 }}"
+      availability: "{{ valid }}"
+      state: >
+        {% if not valid %}
+          {{ none }}
+        {% else %}
+          {{ (v / 100) | round(1) }}
+        {% endif %}
+
+
+##########################################################################
+# ENERGY TOTALS (every 60 seconds): Energy dashboard compatible sensors
+##########################################################################
+- trigger:
+    - platform: time_pattern
+      seconds: "/60"
+  sensor:
+    - name: "EMS Grid Import Energy Total"
+      unique_id: ems_grid_import_energy_total_kwh
+      unit_of_measurement: "kWh"
+      device_class: energy
+      state_class: total_increasing
+      variables:
+        raw: "{{ states('sensor.sm_totwhimp_raw') | float(none) }}"
+        sf:  "{{ states('sensor.sm_totwhimp_sf')  | int(none) }}"
+        wh: >-
+          {% if raw is none or sf is none %}
+            {{ none }}
+          {% else %}
+            {{ raw * (10 ** sf) }}
+          {% endif %}
+        valid: >-
+          {{ raw is not none
+              and sf is not none
+              and sf >= -6 and sf <= 6
+              and wh is not none
+              and wh >= 0
+              and wh < 1e12 }}
+      availability: "{{ valid }}"
+      state: >
+        {% if not valid %}
+          {{ none }}
+        {% else %}
+          {{ (wh / 1000) | round(3) }}
+        {% endif %}
+
+    - name: "EMS PV Energy Total"
+      unique_id: ems_pv_energy_total_kwh
+      unit_of_measurement: "kWh"
+      device_class: energy
+      state_class: total_increasing
+      variables:
+        wh: "{{ states('sensor.gen24_ac_lifetime_energy_raw') | float(none) }}"
+        valid: "{{ wh is not none and wh >= 0 and wh < 1e12 }}"
+      availability: "{{ valid }}"
+      state: >
+        {% if not valid %}
+          {{ none }}
+        {% else %}
+          {{ (wh / 1000) | round(3) }}
+        {% endif %}
+
+
+##########################################################################
+# Binary sensors (updates when dependencies update; dependencies are 5s)
+##########################################################################
+- binary_sensor:
+    - name: "EMS Phase Sensors OK"
+      unique_id: ems_phase_sensors_ok
+      state: >
+        {{ not (
+              states('sensor.ems_grid_current_l1') in ['unavailable','unknown','none','']
+          or states('sensor.ems_grid_current_l2') in ['unavailable','unknown','none','']
+          or states('sensor.ems_grid_current_l3') in ['unavailable','unknown','none','']
+        ) }}
+
+- binary_sensor:
+    - name: "Electricity Dayprice Active"
+      unique_id: electricity_dayprice_active
+      state: >
+        {% set mode = states('input_select.tariff_mode') %}
+        {% if mode == 'Force dayprice' %}
+          true
+        {% elif mode == 'Force nightprice' %}
+          false
+        {% else %}
+          {% set s = states('input_datetime.tariff_day_start') %}
+          {% set e = states('input_datetime.tariff_day_end') %}
+          {% if s in ['unknown','unavailable','none',''] or e in ['unknown','unavailable','none',''] %}
+            false
+          {% else %}
+            {% set start = today_at(s) %}
+            {% set end = today_at(e) %}
+            {% if start < end %}
+              {{ now() >= start and now() < end }}
             {% else %}
-              {{ raw * (10 ** sf) }}
+              {{ now() >= start or now() < end }}
             {% endif %}
-          valid: >-
-            {{ raw is not none
-               and sf is not none
-               and sf >= -6 and sf <= 6
-               and wh is not none
-               and wh >= 0
-               and wh < 1e12 }}
-        availability: "{{ valid }}"
-        state: >
-          {% if not valid %}
-            {{ none }}
-          {% else %}
-            {{ (wh / 1000) | round(3) }}
           {% endif %}
+        {% endif %}
 
-      - name: "EMS PV Energy Total"
-        unique_id: ems_pv_energy_total_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        variables:
-          wh: "{{ states('sensor.gen24_ac_lifetime_energy_raw') | float(none) }}"
-          valid: "{{ wh is not none and wh >= 0 and wh < 1e12 }}"
-        availability: "{{ valid }}"
-        state: >
-          {% if not valid %}
-            {{ none }}
-          {% else %}
-            {{ (wh / 1000) | round(3) }}
-          {% endif %}
-
-
-  ##########################################################################
-  # Binary sensors (updates when dependencies update; dependencies are 5s)
-  ##########################################################################
-  - binary_sensor:
-      - name: "EMS Phase Sensors OK"
-        unique_id: ems_phase_sensors_ok
-        state: >
-          {{ not (
-               states('sensor.ems_grid_current_l1') in ['unavailable','unknown','none','']
-            or states('sensor.ems_grid_current_l2') in ['unavailable','unknown','none','']
-            or states('sensor.ems_grid_current_l3') in ['unavailable','unknown','none','']
-          ) }}
+    - name: "Electricity Nightprice Active"
+      unique_id: electricity_nightprice_active
+      state: >
+        {{ not is_state('binary_sensor.electricity_dayprice_active', 'on') }}
