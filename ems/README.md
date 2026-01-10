@@ -144,5 +144,32 @@ This threshold allows the EMS to infer seasonal behavior without weather or sola
 
 ---
 
+---
+
+## Night charging eligibility example (winter/summer inference)
+
+At **nightprice start**, the EMS decides whether to enable charging **for the whole night** by comparing the current battery SoC against `cap_night_soc_start_pct`:
+
+```text
+if battery_soc < cap_night_soc_start_pct:
+    cap_night_charge_active = ON
+else:
+    cap_night_charge_active = OFF
+```
+
+### Example
+
+| Battery SoC at night start | Threshold (`cap_night_soc_start_pct`) | Result |
+|---:|---:|---|
+| 18% | 40% | Night charging **ENABLED** |
+| 35% | 40% | Night charging **ENABLED** |
+| 42% | 40% | Night charging **DISABLED** |
+| 70% | 40% | Night charging **DISABLED** |
+
+**Interpretation:**  
+- If the battery is **low at sunset** (common in winter), the EMS treats the coming night as a *charging night*.  
+- If the battery is **still healthy/full at sunset** (common in summer), the EMS skips night charging to preserve solar self-consumption the next day.
+
+
 **Mental model:**  
 *Tariff decides when EMS acts. SoC decides whether EMS acts. Power limits decide how hard EMS acts.*
