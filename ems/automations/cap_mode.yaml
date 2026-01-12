@@ -1,79 +1,145 @@
 - alias: "EMS: grid cap mode state (SoC hysteresis, dayprice only)"
   id: ems_cap_mode_state
   mode: single
-  trigger:
-    - platform: state
+  triggers:
+    - trigger: state
       entity_id:
         - sensor.ems_battery_soc
-        - binary_sensor.electricity_dayprice_active
+        - input_boolean.cap_nightprice_active
         - input_boolean.grid_cap_mode
         - input_boolean.cap_enabled
         - input_boolean.cap_manual_override
-  action:
+        - input_boolean.cap_force_mode
+  actions:
     - variables:
-        soc: "{{ states('sensor.ems_battery_soc') | float(none) }}"
+        soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
         start_pct: "{{ states('input_number.cap_soc_start_pct') | float(0) }}"
         reset_pct: "{{ states('input_number.cap_soc_stop_reset_pct') | float(0) }}"
         cap_on: "{{ is_state('input_boolean.grid_cap_mode', 'on') }}"
-        dayprice: "{{ is_state('binary_sensor.electricity_dayprice_active', 'on') }}"
+        nightprice: "{{ is_state('input_boolean.cap_nightprice_active', 'on') }}"
+        dayprice_active: "{{ not nightprice }}"
         enabled: "{{ is_state('input_boolean.cap_enabled', 'on') }}"
         override: "{{ is_state('input_boolean.cap_manual_override', 'on') }}"
+        force_mode: "{{ is_state('input_boolean.cap_force_mode', 'on') }}"
     - choose:
-        # Turn cap ON
+        # Turn ON cap mode if: force mode OR (automatic conditions)
         - conditions: >
-            {{ enabled
-               and not override
-               and not cap_on
-               and dayprice
-               and soc is not none
-               and soc < start_pct }}
+            {{ not cap_on and enabled and not override and dayprice_active and
+               (force_mode or soc < start_pct) }}
           sequence:
             - service: input_boolean.turn_on
-              target:
-                entity_id: input_boolean.grid_cap_mode
+              target: { entity_id: input_boolean.grid_cap_mode }
 
-        # Turn cap OFF
+        # Turn OFF cap mode if: NOT forced AND (normal off conditions)
         - conditions: >
-            {{ cap_on and (
-                 soc is not none and soc > reset_pct
-                 or not dayprice
-                 or not enabled
-                 or override
-            ) }}
+            {{ cap_on and not force_mode and
+               (soc > reset_pct or not dayprice_active or not enabled or override) }}
           sequence:
             - service: input_boolean.turn_off
-              target:
-                entity_id: input_boolean.grid_cap_mode
+              target: { entity_id: input_boolean.grid_cap_mode }
+
+- alias: "EMS: reset battery when force cap mode disabled"
+  id: ems_reset_on_force_cap_off
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.cap_force_mode
+      from: "on"
+      to: "off"
+  actions:
+    - service: script.battery_reset_charging_5_int
+    - service: logbook.log
+      data:
+        name: EMS Force Cap Mode
+        message: "Force cap mode disabled - reset battery to Fronius control"
 
 - alias: "EMS: cap controller (keep grid import at target)"
   id: ems_cap_controller
   mode: restart
-  trigger:
-    - platform: time_pattern
-      seconds: "/5"
-  condition:
-    - condition: state
+  triggers:
+    - trigger: time_pattern
+      seconds: "/10"
+      id: loop
+    - trigger: state
       entity_id: input_boolean.grid_cap_mode
-      state: "on"
-  action:
-    - variables:
-        p_grid: "{{ states('sensor.ems_grid_power') | float(none) }}"
-        target: "{{ states('input_number.cap_import_target_w') | float(0) }}"
+      to: "off"
+      id: cap_off
+    - trigger: state
+      entity_id: input_boolean.grid_cap_mode
+      to: "on"
+      id: cap_on
+  variables:
+    import_target: "{{ states('input_number.cap_import_target_w') | float(1500) }}"
+    k_gain: 0.3
+    grid_deadband: 500
+    max_discharge: 5600
+    max_charge: 5600
+    min_step: 500
+    max_change_per_cycle: 1500
+    soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+    cap_on: "{{ is_state('input_boolean.grid_cap_mode', 'on') }}"
+    grid_power: "{{ states('sensor.ems_grid_power') | float(0) }}"
+    batt_power: "{{ states('sensor.ems_battery_power') | float(0) }}"
+    grid_error: "{{ (grid_power - import_target) | float(0) }}"
+    desired_power_raw: >-
+      {% set err = grid_error | float(0) %}
+      {% if (err | abs) < grid_deadband %}
+        {{ batt_power }}
+      {% else %}
+        {{ batt_power + k_gain * err }}
+      {% endif %}
+    desired_power_clamped: >-
+      {% set p = desired_power_raw | float(0) %}
+      {% set max_dis = max_discharge | float(0) %}
+      {% set max_ch  = max_charge    | float(0) %}
+      {% set min_step_val = min_step | float(0) %}
+      {# SoC protection: don't discharge below 5% #}
+      {% if soc <= 5 and p > 0 %}
+        {% set p = 0 %}
+      {% endif %}
+      {# SoC protection: don't charge above 95% #}
+      {% if soc >= 95 and p < 0 %}
+        {% set p = 0 %}
+      {% endif %}
+      {# Clamp to physical limits #}
+      {% if p > max_dis %}
+        {% set p = max_dis %}
+      {% elif p < (0 - max_ch) %}
+        {% set p = 0 - max_ch %}
+      {% endif %}
+      {# Ignore very small changes to avoid twitching #}
+      {% if (p - batt_power) | abs < min_step_val %}
+        {{ batt_power | round(0) }}
+      {% else %}
+        {# Rate limit: don't change too fast #}
+        {% set delta = p - batt_power %}
+        {% set max_delta = max_change_per_cycle | float(1500) %}
+        {% if delta > max_delta %}
+          {{ (batt_power + max_delta) | round(0) }}
+        {% elif delta < (0 - max_delta) %}
+          {{ (batt_power - max_delta) | round(0) }}
+        {% else %}
+          {{ p | round(0) }}
+        {% endif %}
+      {% endif %}
+  actions:
     - choose:
-        - conditions: "{{ p_grid is not none }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.id == 'cap_off' }}"
           sequence:
-            - variables:
-                error: "{{ target - p_grid }}"
-                desired_batt: >
-                  {% if error > 5000 %} 5000
-                  {% elif error < -5000 %} -5000
-                  {% else %} {{ error }}
-                  {% endif %}
             - service: script.battery_set_power_target
               data:
-                power_w: "{{ desired_batt }}"
-      default:
-        # If grid power is unknown, stop interfering
-        - service: script.battery_set_power_target
-          data:
-            power_w: 0
+                power_w: 0
+        - conditions:
+            - condition: template
+              value_template: "{{ cap_on and trigger.id in ['loop', 'cap_on'] }}"
+            - condition: template
+              value_template: "{{ states('sensor.ems_battery_power') not in ['unavailable', 'unknown', 'none'] }}"
+            - condition: template
+              value_template: "{{ states('sensor.ems_grid_power') not in ['unavailable', 'unknown', 'none'] }}"
+          sequence:
+            - service: script.battery_set_power_target
+              data:
+                power_w: "{{ desired_power_clamped | int }}"
+      default: []

@@ -5,7 +5,6 @@ cap_soc_start_pct:
   step: 1
   unit_of_measurement: "%"
   icon: mdi:battery-charging-50
-  initial: 12
 
 cap_soc_stop_reset_pct:
   name: "EMS: Cap SoC reset/stop (%)"
@@ -14,7 +13,6 @@ cap_soc_stop_reset_pct:
   step: 1
   unit_of_measurement: "%"
   icon: mdi:battery-90
-  initial: 17
 
 cap_import_target_w:
   name: "EMS: Grid import target (W)"
@@ -23,7 +21,6 @@ cap_import_target_w:
   step: 100
   unit_of_measurement: "W"
   icon: mdi:transmission-tower-import
-  initial: 3000
 
 cap_night_soc_start_pct:
   name: "EMS: Night 'winter' threshold SoC (%)"
@@ -32,7 +29,6 @@ cap_night_soc_start_pct:
   step: 1
   unit_of_measurement: "%"
   icon: mdi:battery-arrow-down
-  initial: 40
 
 cap_night_soc_target_pct:
   name: "EMS: Night charge target SoC (%)"
@@ -41,7 +37,6 @@ cap_night_soc_target_pct:
   step: 1
   unit_of_measurement: "%"
   icon: mdi:battery-arrow-up
-  initial: 60
 
 cap_night_charge_power_w:
   name: "EMS: Night charge power (W)"
@@ -50,7 +45,6 @@ cap_night_charge_power_w:
   step: 100
   unit_of_measurement: "W"
   icon: mdi:transmission-tower-import
-  initial: 3000
 
 cap_night_max_power_w:
   name: "EMS: Night max grid import (W)"
@@ -59,7 +53,6 @@ cap_night_max_power_w:
   step: 100
   unit_of_measurement: "W"
   icon: mdi:transmission-tower
-  initial: 10000
 
 cap_night_max_phase_a:
   name: "EMS: Night max phase current (A)"
@@ -68,4 +61,12 @@ cap_night_max_phase_a:
   step: 0.5
   unit_of_measurement: "A"
   icon: mdi:alpha-a-circle
-  initial: 24
+
+ems_ev_max_charging_current:
+  name: "EMS: EV max charging current (A)"
+  min: 6
+  max: 32
+  step: 1
+  unit_of_measurement: "A"
+  icon: mdi:ev-station
+  initial: 6

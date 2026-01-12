@@ -1,62 +1,196 @@
-# Modbus registers used by this EMS
+# Fronius GEN24 – Registers used by fronius-ems
 
-This file is **auto-generated** from `ems/modbus_gen24.yaml`.
+This document lists **all Modbus registers actively used by fronius-ems**, what they represent, and **how EMS uses them**.
 
-## Notes
+The goal is transparency:
+- You should be able to verify every value in Fronius SolarWeb / HA
+- No “mystery registers”
+- Easy troubleshooting when something looks wrong
 
-- Tables below list **read/telemetry** registers configured as sensors.
-- Battery **control writes** are documented in the main `README.md` (40348/40355/40356), because they are written via scripts and not defined as sensors here.
+---
 
-## Battery SoC & limits (slave 1)
+## 🧠 Design principles
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 40310 | `gen24_soc_raw` | holding | uint16 | 30 | Battery state of charge (SoC) raw |
-| 1 | 40350 | `gen24_battery_soc_min_raw` | holding | uint16 | 60 | Battery minimum SoC setting (raw) |
-| 1 | 40351 | `gen24_battery_soc_raw` | holding | uint16 | 30 | Battery SoC (alternate/raw) |
+- **Only registers that have been verified in real installations are used**
+- Raw Modbus sensors are *never* used directly in automations
+- All logic uses validated `ems_*` template sensors
+- Registers are shared between House A / House B (HVS & HVM)
 
-## Battery power telemetry (slave 1)
+---
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 40314 | `gen24_storage_module3_dcw_raw` | holding | uint16 | 2 | Battery DC power / module 3 (raw) |
-| 1 | 40334 | `gen24_storage_module4_dcw_raw` | holding | uint16 | 2 | Battery DC power / module 4 (raw) |
+## 🔋 Battery / Storage (GEN24)
 
-## DC scale & misc (slave 1)
+### Battery State of Charge (SoC)
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 40257 | `gen24_dc_power_sf` | holding | int16 | 5 | Scale factor for DC power |
+| Register | Name | Unit | Used by EMS |
+|--------|------|------|-------------|
+| `40351` | Battery SoC | 0.01 % | ✅ **Primary SoC** |
 
-## Energy & counters (slave 1)
+**Notes**
+- Value example: `3150` → `31.50 %`
+- This is the *only* SoC register used by EMS
+- Replaces earlier incorrect assumptions about `40310`
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 40188 | `gen24_ac_lifetime_energy_raw` | holding | custom | 60 | Lifetime AC energy (raw, custom 32-bit); count=2; struct=>L |
+---
 
-## Inverter AC telemetry (slave 1)
+### Battery Minimum SoC (reserve)
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 30072 | `inv_ac_power_raw` | input | int16 |  | AC inverter power (raw) |
-| 1 | 30081 | `inv_ac_power_sf` | input | int16 |  | Scale factor for AC power |
+| Register | Name | Unit | Used by EMS |
+|--------|------|------|-------------|
+| `40350` | Minimum allowed SoC | 0.01 % | ✅ |
 
-## PV telemetry (slave 1)
+**Usage**
+- EMS reads this value for informational purposes
+- EMS can reset this register during dayprice start (battery reset)
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 1 | 30201 | `inv_pv_power_raw` | input | int16 |  | PV power (raw) |
-| 1 | 30247 | `inv_pv_power_sf` | input | int16 |  | Scale factor for PV power |
+---
 
-## Smart meter telemetry (slave 200)
+### Battery Power (charge / discharge)
 
-| Slave | Address | Name | Input | Data type | Scan (s) | Notes |
-|---:|---:|---|---|---|---:|---|
-| 200 | 40072 | `sm_current_l1_raw` | holding | int16 | 1 | Phase L1 current (raw) |
-| 200 | 40073 | `sm_current_l2_raw` | holding | int16 | 1 | Phase L2 current (raw) |
-| 200 | 40074 | `sm_current_l3_raw` | holding | int16 | 1 | Phase L3 current (raw) |
-| 200 | 40075 | `sm_current_sf` | holding | int16 | 30 | Scale factor for phase currents |
-| 200 | 40087 | `sm_power_raw` | holding | int16 | 1 | Grid power (raw) |
-| 200 | 40091 | `sm_power_sf` | holding | int16 | 1 | Scale factor for grid power |
-| 200 | 40115 | `sm_totwhimp_raw` | holding | uint32 | 30 | Total imported energy (raw) |
-| 200 | 40123 | `sm_totwhimp_sf` | holding | int16 | 600 | Scale factor for imported energy |
+Battery power is derived from **two DC power registers**.
+
+| Register | Name | Unit | Notes |
+|--------|------|------|------|
+| `40314` | Storage module 3 DC power | W (raw) | Signed via SF |
+| `40334` | Storage module 4 DC power | W (raw) | Signed via SF |
+| `40257` | DC power scale factor | 10^x | Range -4…0 |
+
+**EMS calculation**
+```
+battery_power_w =
+  (storage_module4_dcw_raw - storage_module3_dcw_raw)
+  * (10 ** dc_power_sf)
+```
+
+**Sign convention**
+- `+` → battery discharging
+- `-` → battery charging
+
+This formula has been verified on:
+- BYD HVS
+- BYD HVM
+
+---
+
+## ⚡ Grid / Smart Meter (Slave 200)
+
+### Grid Power (import / export)
+
+| Register | Name | Unit | Used by EMS |
+|--------|------|------|-------------|
+| `40087` | Total real power | W (raw) | ✅ |
+| `40091` | Power scale factor | 10^x | ✅ |
+
+**EMS calculation**
+```
+grid_power_w = raw * (10 ** sf)
+```
+
+Typical convention:
+- `+` import
+- `-` export  
+(depends on meter configuration)
+
+---
+
+### Phase Currents (L1 / L2 / L3)
+
+| Register | Phase | Unit |
+|--------|-------|------|
+| `40072` | L1 current raw | A (raw) |
+| `40073` | L2 current raw | A (raw) |
+| `40074` | L3 current raw | A (raw) |
+| `40075` | Current scale factor | 10^x |
+
+**Validation rules**
+- Scale factor range: **-4 … 0**
+- Absolute current clamp: **≤ 40 A**
+- Must be updated recently (< 5s)
+
+Only validated values are exposed as:
+- `sensor.ems_grid_current_l1`
+- `sensor.ems_grid_current_l2`
+- `sensor.ems_grid_current_l3`
+
+---
+
+### Grid Import Energy (total)
+
+| Register | Name | Unit |
+|--------|------|------|
+| `40115` | Imported energy | Wh (raw) |
+| `40123` | Energy scale factor | 10^x |
+
+Used for:
+- Energy dashboard
+- Utility meters
+
+---
+
+## ☀️ Solar / PV (GEN24)
+
+### PV Power
+
+| Register | Name | Unit |
+|--------|------|------|
+| `30201` | PV power raw | W |
+| `30247` | PV power scale factor | 10^x |
+
+Used for:
+- Informational dashboards
+- PV vs battery intuition
+
+---
+
+### PV / AC Energy (lifetime)
+
+| Register | Name | Unit |
+|--------|------|------|
+| `40188–40189` | AC lifetime energy | Wh |
+
+Used for:
+- EMS PV energy total
+- Energy dashboard
+
+---
+
+## 🧯 Control / Write Registers
+
+These registers are **written by EMS scripts**.
+
+| Register | Purpose |
+|--------|---------|
+| `40348` | Battery control mode |
+| `40355` | Charge / discharge power limit |
+| `40356` | Maximum discharge |
+| `40361` | Battery enable / mode |
+
+**Important**
+- These are never written directly by automations
+- Only via controlled scripts (`battery_set_power_target`, `battery_reset_*`)
+
+---
+
+## 🚫 Registers intentionally NOT used
+
+| Register | Reason |
+|--------|--------|
+| `40310` | Unreliable / misleading SoC |
+| High-frequency debug regs | Recorder & performance protection |
+| Vendor-specific diagnostics | Non-portable |
+
+---
+
+## ✅ Summary
+
+If a register is not listed here:
+- It is **not required**
+- It is **not used**
+- EMS will function without it
+
+This keeps the system:
+- Predictable
+- Portable
+- Auditable
+
+If Fronius firmware changes a register meaning, this file is the **single source of truth** to update.

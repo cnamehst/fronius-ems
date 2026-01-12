@@ -4,4 +4,11 @@ ems_season:
   options:
     - Winter
     - Summer
-  initial: Winter
+
+tariff_mode:
+  name: Tariff mode
+  icon: mdi:flash
+  options:
+    - Auto
+    - Force dayprice
+    - Force nightprice

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+  <defs>
+    <style>
+      .box{fill:#ffffff;stroke:#2b2b38;stroke-width:2;rx:18;ry:18}
+      .title{font:700 18px system-ui, -apple-system, Segoe UI, Roboto, Arial}
+      .text{font:400 15px system-ui, -apple-system, Segoe UI, Roboto, Arial; fill:#1b1b22}
+      .muted{fill:#4b4b5a}
+      .arrow{stroke:#d11f2a;stroke-width:4;fill:none;marker-end:url(#m)}
+      .line{stroke:#2b2b38;stroke-width:3;fill:none;marker-end:url(#m2)}
+      .pill{fill:#f4f5f7;stroke:#c8cbd3;stroke-width:1;rx:999;ry:999}
+    </style>
+    <marker id="m" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto">
+      <path d="M0,0 L14,7 L0,14 z" fill="#d11f2a"/>
+    </marker>
+    <marker id="m2" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto">
+      <path d="M0,0 L14,7 L0,14 z" fill="#2b2b38"/>
+    </marker>
+  </defs>
+
+  <rect x="40" y="70" width="360" height="280" class="box"/>
+  <text x="70" y="110" class="title">Home Assistant (EMS)</text>
+  <rect x="70" y="140" width="300" height="46" class="pill"/>
+  <text x="85" y="169" class="text">input_boolean.ems_ev_enabled</text>
+  <text x="330" y="169" class="text muted">ON/OFF</text>
+
+  <rect x="70" y="200" width="300" height="46" class="pill"/>
+  <text x="85" y="229" class="text">input_number.ems_ev_max_charging_current</text>
+  <text x="340" y="229" class="text muted">A</text>
+
+  <rect x="70" y="260" width="300" height="70" class="pill"/>
+  <text x="85" y="289" class="text">Automation: wattpilot_ev_control.yaml</text>
+  <text x="85" y="314" class="text muted">bind + night governor</text>
+
+  <rect x="470" y="70" width="690" height="280" class="box"/>
+  <text x="500" y="110" class="title">Fronius Wattpilot (integration)</text>
+
+  <rect x="500" y="150" width="620" height="56" class="pill"/>
+  <text x="520" y="185" class="text">number.wattpilot_max_charging_current</text>
+  <text x="990" y="185" class="text muted">A</text>
+
+  <rect x="500" y="228" width="620" height="88" class="pill"/>
+  <text x="520" y="262" class="text">If grid import or any phase current exceeds limits:</text>
+  <text x="520" y="290" class="text muted">EMS temporarily drops Wattpilot to 6A</text>
+
+  <path d="M370 223 C420 223, 430 223, 480 223" class="arrow"/>
+  <text x="385" y="205" class="text muted">set_value</text>
+
+  <path d="M220 186 C220 120, 520 120, 520 150" class="line"/>
+  <text x="250" y="132" class="text muted">gates all actions</text>
+
+  <text x="40" y="395" class="text muted">Tip: If your Wattpilot entity_id differs, rename it in HA Entities to match.</text>
+</svg>

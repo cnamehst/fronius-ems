@@ -139,3 +139,53 @@
       count: 2
       structure: ">L"
       scan_interval: 60
+
+    # Battery control registers (SunSpec Storage Model 124)
+    - name: gen24_wcha_max
+      slave: 1
+      address: 40346
+      input_type: holding
+      data_type: uint16
+      scan_interval: 300
+
+    - name: gen24_wcha_max_sf
+      slave: 1
+      address: 40362
+      input_type: holding
+      data_type: int16
+      scan_interval: 300
+
+    - name: gen24_inoutwrte_sf
+      slave: 1
+      address: 40369
+      input_type: holding
+      data_type: int16
+      scan_interval: 300
+
+    - name: gen24_stor_ctl_mod
+      slave: 1
+      address: 40348
+      input_type: holding
+      data_type: uint16
+      scan_interval: 10
+
+    - name: gen24_out_w_rte
+      slave: 1
+      address: 40356
+      input_type: holding
+      data_type: int16
+      scan_interval: 10
+
+    - name: gen24_in_w_rte
+      slave: 1
+      address: 40357
+      input_type: holding
+      data_type: int16
+      scan_interval: 10
+
+    - name: gen24_cha_gri_set
+      slave: 1
+      address: 40361
+      input_type: holding
+      data_type: uint16
+      scan_interval: 60

@@ -1,80 +1,195 @@
 # EMS for Fronius GEN24 (Home Assistant)
 
-This repository implements a **deterministic, battery-aware Energy Management System (EMS)** for a **single Fronius GEN24 inverter** using **Modbus TCP**.
-
-House **#1** is the playground.  
-House **#2 / #3** reuse the same logic with different parameters.
+**An open, deterministic Energy Management System for Fronius GEN24 – built by CNAME AB, with help from ChatGPT and Claude.ai.**
 
 ---
 
-## What this EMS is trying to accomplish
+## What this is
 
-### Dayprice: self-consumption & peak shaving (“cap mode”)
-During **dayprice**, we prefer to run the house on battery as much as possible. When battery SoC drops below a threshold, we enter **cap mode** and dynamically set a battery power target to keep grid import near a configured target (e.g. 3 kW). Cap mode exits via hysteresis once SoC recovers.
+This project is a **practical, production‑tested EMS** for homes using:
 
-### Nightprice: controlled charging (optional)
-During **nightprice**, the EMS may charge the battery from the grid if it started the night sufficiently low. Charging is season-aware (“winter logic”), capped by power limits, and phase-safe.
+- Fronius **GEN24** inverters  
+- BYD **HVS / HVM** batteries  
+- Home Assistant as the orchestration layer  
 
-### Night safety: protect fuses and phases
-At night, EMS continuously monitors **total import** and **per-phase currents**. If limits are exceeded, forced charging is reduced/stopped and battery discharge/export can be disabled **via Modbus control registers**.
+It was built because existing “smart” solutions often suffer from one or more of these problems:
 
----
+- opaque logic (“why did it do that?”)
+- cloud dependency
+- over‑optimization based on forecasts
+- poor fuse protection
+- high database load from raw sensors
 
-## Core design principles
-
-1. **Raw Modbus = plumbing.** Not for dashboards. Not for statistics. Not for Energy.
-2. **EMS sensors = products.** Validated, stable, suitable for dashboards and Energy.
-3. **EMS owns the battery explicitly** when active (no hidden defaults).
-4. **Avoid handing control back implicitly.** When the EMS is responsible, it should stay responsible.
-5. **BYD BMS is final authority.** The inverter can “allow”, but the battery decides actual limits.
+This EMS takes a different approach.
 
 ---
 
-## Performance & stability (IMPORTANT)
+## Design philosophy
 
-Home Assistant can become slow if you:
-- poll lots of Modbus sensors at 1s
-- record raw sensors in the database
-- produce long-term statistics from noisy/raw sensors
+**Predictability beats cleverness.**
 
-### The EMS approach
-- Raw Modbus sensors are polled at a reasonable cadence (typically **5s**; slower where appropriate).
-- Raw sensors are excluded from recorder.
-- EMS template sensors are **time-triggered** to reduce CPU churn and database writes.
+The system is intentionally built around:
+- deterministic rules
+- explicit thresholds
+- local control only
+- clear separation between *measurement*, *decision*, and *action*
 
-### Update cadence used by EMS template sensors
-| Category | Examples | Cadence |
-|---|---|---|
-| Power + phase currents | EMS Grid Power, EMS PV Power, EMS Battery Power, EMS Grid Current L1/L2/L3 | Every **5s** |
-| Battery SoC | EMS Battery SoC, EMS Battery SoC Minimum | Every **30s** |
-| Energy totals | EMS Grid Import Energy Total, EMS PV Energy Total | Every **60s** |
+No Nordpool.  
+No Solcast.  
+No weather guesses.
 
-> Tip: Use only `sensor.ems_*` in dashboards and automations. Keep raw sensors as internal plumbing.
+Just **measured reality**, tariffs, and safety limits.
 
 ---
 
-## Battery control registers (EMS-owned writes)
+## What EMS does
 
-These are the only registers the EMS should write to for hard battery behavior control:
+### 1. Dayprice (normal operation)
+- Battery runs the house automatically
+- Grid import is allowed
+- Battery is protected by a minimum SoC
+- No artificial limits unless needed
 
-| Address | Name (EMS) | Unit | Purpose |
-|---:|---|---|---|
-| 40348 | Battery operation mode | enum | Selects inverter vs EMS limit modes |
-| 40355 | OutWRte | reg | Max discharge power limit (register encoding) |
-| 40356 | InWRte | reg | Max charge power limit (register encoding) |
+At dayprice start, EMS:
+- resets battery control back to Fronius “automatic”
+- clears any night charging state
+- prepares for cap mode if needed later
 
-### 40348 operation mode semantics
-| Value | Meaning |
-|---:|---|
-| 0 | Normal/default: inverter manages charging/discharging automatically |
-| 1 | Activates discharge limit using OutWRte (40355) |
-| 2 | Charge only (typically paired with OutWRte=0) |
-| 3 | Activates **both** charge and discharge limits using InWRte (40356) and OutWRte (40355) |
+---
 
-### Mode patterns used by this EMS
+### 2. Cap mode (daytime fuse protection)
+When battery SoC drops below a configured threshold:
+- EMS enables *grid cap mode*
+- Grid import is limited (e.g. 3 kW)
+- Battery is trickle‑charged just enough to avoid collapse
+- Fuse limits are respected at all times
 
-**Normal operation (“let GEN24 handle it”)**
-```text
-40348 = 0
-40355 = 10000
-40356 = 10000
+When SoC recovers:
+- Cap mode disengages automatically
+- Battery returns to normal operation
+
+This avoids:
+- peak‑tariff penalties
+- main fuse trips
+- oscillating charge/discharge behavior
+
+---
+
+### 3. Nightprice charging (optional, controlled)
+At nightprice start:
+- EMS decides if charging is needed based on **actual battery SoC**
+- This doubles as a **winter/summer heuristic**
+  - Low SoC → winter → charge
+  - High SoC → summer → skip charging
+
+Charging:
+- happens at a fixed, user‑defined power
+- stops at a target SoC
+- is guarded by grid import and phase current limits
+
+A manual “never night charge” (summer mode) override is always available.
+
+---
+
+### 4. Optional EV (Wattpilot) control
+If enabled:
+- EMS can bind to a Fronius Wattpilot charger
+- EV charging is allowed during nightprice
+- Phase currents and import limits are enforced
+- EMS can temporarily reduce EV current to protect fuses
+
+If not enabled:
+- EMS does **nothing** with EVs
+
+---
+
+## What EMS deliberately does NOT do
+
+- No price prediction
+- No solar forecast dependency
+- No battery cycling for “optimization”
+- No cloud services
+- No writing Modbus registers from automations directly
+
+Everything is:
+- local
+- auditable
+- reversible
+
+---
+
+## Architecture overview
+
+```
+Modbus (raw, fast, noisy)
+        ↓
+Template sensors (ems_*)
+        ↓
+Decision automations
+        ↓
+Scripted register writes
+```
+
+Raw Modbus sensors:
+- are *never* used directly in logic
+- are excluded from long‑term statistics
+
+---
+
+## Supported hardware
+
+- Fronius GEN24 (tested on 8.0 / 10.0)
+- BYD Battery‑Box Premium HVS & HVM
+- Fronius Smart Meter (Modbus TCP)
+- Fronius Wattpilot (optional)
+
+---
+
+## Installation model
+
+This repository is designed to be:
+
+- cloned into a **clean Home Assistant install**
+- included using **native HA includes**
+- configured mostly via **helpers in the UI**
+
+EMS assumes it is the *first* system you install.
+Anything added later is outside its scope.
+
+---
+
+## Documentation
+
+- `docs/registers.md` — all Modbus registers used and why
+- `VERSION.md` — current version
+- `CHANGELOG.md` — historical changes
+- Dashboards — EMS status, configuration, sensors
+
+---
+
+## Credits
+
+This system was designed and implemented by **CNAME AB**  
+with iterative reasoning and validation assisted by:
+
+- **ChatGPT** (architecture, automation structure, documentation)
+- **Claude.ai** (cross‑checking assumptions, alternative perspectives)
+
+The final decisions, testing, and responsibility remain human.
+
+---
+
+## License & intent
+
+This project is published openly to:
+- help other Fronius GEN24 owners
+- encourage transparent energy control
+- avoid vendor lock‑in
+
+Use it, adapt it, learn from it.
+
+If you improve it — please share back.
+
+---
+
+*“Simple systems fail less often — and are easier to fix when they do.”*

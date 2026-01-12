@@ -19,17 +19,32 @@ sections:
         entities:
           - entity: input_boolean.cap_enabled
             name: EMS enabled
+          - entity: input_select.ems_season
+            name: Season preset
           - entity: input_boolean.cap_manual_override
             name: Manual override (disable cap)
-          - entity: input_boolean.cap_nightprice_active
-            name: Nightprice active (test toggle)
           - entity: input_boolean.grid_cap_mode
             name: Cap mode active (read-only)
+
+      - type: entities
+        title: Tariff schedule
+        show_header_toggle: false
+        entities:
+          - entity: input_select.tariff_mode
+            name: Tariff mode
+          - entity: input_datetime.tariff_day_start
+            name: Dayprice starts at
+          - entity: input_datetime.tariff_day_end
+            name: Dayprice ends at
+          - entity: input_boolean.cap_nightprice_active
+            name: Nightprice active (status)
 
       - type: entities
         title: Day / cap mode tuning
         show_header_toggle: false
         entities:
+          - entity: input_boolean.cap_force_mode
+            name: Force cap mode ON (manual)
           - entity: input_number.cap_soc_start_pct
             name: SoC start cap (%)
           - entity: input_number.cap_soc_stop_reset_pct
