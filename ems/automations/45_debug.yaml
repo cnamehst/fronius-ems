@@ -1,0 +1,18 @@
+- alias: "DEBUG: log cap_nightprice_active changes"
+  id: debug_log_cap_nightprice_active
+  trigger:
+    - platform: state
+      entity_id: input_boolean.cap_nightprice_active
+  action:
+    - service: logbook.log
+      data:
+        name: "DEBUG cap_nightprice_active"
+        message: "cap_nightprice_active -> {{ trigger.to_state.state }}"
+    - service: logbook.log
+      data:
+        name: Tariff debug
+        message: >-
+          mode={{ mode }}, s={{ s }}, e={{ e }},
+          now_ts={{ now_ts }}, start_ts={{ start_ts }}, end_ts={{ end_ts }},
+          is_day={{ is_day }}, is_nightprice={{ is_nightprice }},
+          cap_nightprice_active={{ states('input_boolean.cap_nightprice_active') }}

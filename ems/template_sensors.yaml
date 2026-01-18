@@ -71,25 +71,25 @@
       # Module 4 - Module 3 = Discharge - Charge = Net Battery Power
       # Positive = discharging, Negative = charging
       # -----------------------------
-      - name: "EMS Battery Power"
-        unique_id: ems_battery_power_w
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        availability: >
+      - name: "EMS Battery Power"                                     
+        unique_id: ems_battery_power_w                                
+        unit_of_measurement: "W"                                      
+        device_class: power                                         
+        state_class: measurement                                    
+        availability: >                                             
           {% set r3_state = states('sensor.gen24_storage_module3_dcw_raw') %}
           {% set r4_state = states('sensor.gen24_storage_module4_dcw_raw') %}
-          {% set sf_state = states('sensor.gen24_dc_power_sf') %}
-          {{ r3_state not in ['unavailable', 'unknown', 'none'] and
-             r4_state not in ['unavailable', 'unknown', 'none'] and
-             sf_state not in ['unavailable', 'unknown', 'none'] }}
-        state: >
+          {% set sf_state = states('sensor.gen24_dc_power_sf') %}            
+          {{ r3_state not in ['unavailable', 'unknown', 'none'] and          
+             r4_state not in ['unavailable', 'unknown', 'none'] and          
+             sf_state not in ['unavailable', 'unknown', 'none'] }}           
+        state: >                                                             
           {% set raw3 = states('sensor.gen24_storage_module3_dcw_raw') | int(0) %}
           {% set raw4 = states('sensor.gen24_storage_module4_dcw_raw') | int(0) %}
-          {% set sf_raw = states('sensor.gen24_dc_power_sf') | int(-999) %}
-          {% set sf = -2 if (sf_raw < -10 or sf_raw > 0) else sf_raw %}
-          {% set power = (raw4 - raw3) * (10 ** sf) %}
-          {{ [[-15000, power] | max, 15000] | min }}
+          {% set sf_raw = states('sensor.gen24_dc_power_sf') | int(-999) %}       
+          {% set sf = -2 if (sf_raw < -10 or sf_raw > 0) else sf_raw %}           
+          {% set power = (raw4 - raw3) * (10 ** sf) %}                            
+          {{ [[-15000, power] | max, 15000] | min }}   
 
       # -----------------------------
       # EMS Grid Phase Currents (A)
@@ -270,3 +270,15 @@
             or states('sensor.ems_grid_current_l2') in ['unavailable','unknown','none','']
             or states('sensor.ems_grid_current_l3') in ['unavailable','unknown','none','']
           ) }}
+  ##########################################################################
+  # Tariff derived binary sensors (single source of truth)
+  ##########################################################################
+  - binary_sensor:
+      - name: "Electricity Nightprice Active"
+        unique_id: electricity_nightprice_active
+        state: "{{ is_state('input_boolean.cap_nightprice_active', 'on') }}"
+
+      - name: "Electricity Dayprice Active"
+        unique_id: electricity_dayprice_active
+        state: "{{ not is_state('input_boolean.cap_nightprice_active', 'on') }}"
+

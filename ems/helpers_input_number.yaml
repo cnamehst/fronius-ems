@@ -62,11 +62,12 @@ cap_night_max_phase_a:
   unit_of_measurement: "A"
   icon: mdi:alpha-a-circle
 
-ems_ev_max_charging_current:
-  name: "EMS: EV max charging current (A)"
-  min: 6
-  max: 32
-  step: 1
-  unit_of_measurement: "A"
-  icon: mdi:ev-station
-  initial: 6
+ems_last_batt_target_w:
+  name: "EMS: last battery target (W)"
+  min: -10000
+  max: 10000
+  step: 50
+  mode: box
+  unit_of_measurement: "W"
+  icon: mdi:battery-sync
+  initial: 0

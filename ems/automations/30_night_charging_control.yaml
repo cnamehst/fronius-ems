@@ -1,0 +1,264 @@
+# ============================================
+# EMS - NIGHT CHARGING CONTROL (AUTHORITY)
+# ============================================
+
+- id: ems_night_charging_control_authority
+  alias: "EMS: night charging control (SoC + fuse guard + EV) [AUTHORITY]"
+  description: >
+    Single authority for night behavior.
+    - Latch: cap_night_charge_active is decided when nightprice starts (soc < cap_night_soc_start_pct)
+    - Battery: charges up to cap_night_soc_target_pct, capped by cap_night_charge_power_w
+    - Guard: cap_night_max_power_w + cap_night_max_phase_a
+    - Hold: uses battery_neutral_w=1 (GEN24-friendly) to prevent discharge/self-zero
+    - EV optional: start charging + conservative retry, plus current limiting/ramp-up
+
+  mode: restart
+
+  trigger:
+    # Main loop (also used for fallback retry timing)
+    - platform: time_pattern
+      seconds: "/10"
+
+    # State-driven wakeups
+    - platform: state
+      entity_id:
+        - input_boolean.cap_nightprice_active
+        - input_boolean.cap_enabled
+        - input_boolean.cap_night_never_charge
+        - input_number.cap_night_soc_start_pct
+        - input_number.cap_night_soc_target_pct
+        - input_number.cap_night_charge_power_w
+        - input_number.cap_night_max_power_w
+        - input_number.cap_night_max_phase_a
+        - sensor.ems_battery_soc
+        - sensor.ems_grid_power
+        - sensor.ems_grid_current_l1
+        - sensor.ems_grid_current_l2
+        - sensor.ems_grid_current_l3
+        - input_boolean.ev_control_enabled
+        - number.wattpilot_max_charging_current
+        - sensor.wattpilot_carconnected
+
+  condition:
+    - condition: state
+      entity_id: input_boolean.cap_enabled
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.cap_nightprice_active
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ems_phase_sensors_ok
+      state: "on"
+
+  action:
+    - variables:
+        # ---- Inputs ----
+        soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+        start_pct: "{{ states('input_number.cap_night_soc_start_pct') | float(0) }}"
+        soc_target: "{{ states('input_number.cap_night_soc_target_pct') | float(90) }}"
+        max_charge_w: "{{ states('input_number.cap_night_charge_power_w') | float(5600) }}"
+        max_import_w: "{{ states('input_number.cap_night_max_power_w') | float(14000) }}"
+        max_phase_a: "{{ states('input_number.cap_night_max_phase_a') | float(22) }}"
+        never_charge: "{{ is_state('input_boolean.cap_night_never_charge', 'on') }}"
+
+        # Latch state (authoritative “winter active” for THIS night)
+        latch_on: "{{ is_state('input_boolean.cap_night_charge_active', 'on') }}"
+
+        # ---- Measurements ----
+        p_grid: "{{ states('sensor.ems_grid_power') | float(0) }}"
+        i1: "{{ states('sensor.ems_grid_current_l1') | float(none) }}"
+        i2: "{{ states('sensor.ems_grid_current_l2') | float(none) }}"
+        i3: "{{ states('sensor.ems_grid_current_l3') | float(none) }}"
+        i_max: >-
+          {% set vals = [i1,i2,i3] | select('ne', none) | list %}
+          {{ (vals | max) if (vals | length) > 0 else none }}
+
+        # ---- Guard thresholds ----
+        headroom_margin_w: 200
+        battery_neutral_w: 1
+
+        overcurrent: "{{ i_max is not none and i_max > max_phase_a }}"
+        overimport: "{{ p_grid > max_import_w }}"
+
+        # ---- Headroom ----
+        headroom_w: "{{ [0, (max_import_w - headroom_margin_w - p_grid) | float(0)] | max }}"
+        phase_headroom_a: "{{ [0, (max_phase_a - (i_max if i_max is not none else 0)) | float(0)] | max }}"
+        phase_headroom_w: "{{ (phase_headroom_a * 230 * 3 * 0.8) | float(0) }}"
+
+        allowed_charge_w: >-
+          {% if headroom_w < 500 or phase_headroom_w < 500 %}
+            0
+          {% else %}
+            {{ [headroom_w, phase_headroom_w, max_charge_w] | min }}
+          {% endif %}
+
+        # Battery command: negative = force charge
+        batt_target_w: "{{ (0 - allowed_charge_w) | int(0) }}"
+
+        # ---- Start event detection (for latch + EV start) ----
+        night_just_started: >-
+          {{ trigger.platform == 'state'
+             and trigger.entity_id == 'input_boolean.cap_nightprice_active'
+             and trigger.to_state is not none
+             and trigger.to_state.state == 'on' }}
+
+        # ---- EV control optional ----
+        ev_enabled: "{{ is_state('input_boolean.ev_control_enabled', 'on') }}"
+        ev_current_entity: "number.wattpilot_max_charging_current"
+        ev_start_button: "button.wattpilot_start_charging_force"
+        ev_carconnected_entity: "sensor.wattpilot_carconnected"
+
+        ev_available: "{{ ev_enabled and (states(ev_current_entity) not in ['unknown','unavailable','none','']) }}"
+        ev_cur_a: "{{ states(ev_current_entity) | float(0) }}"
+        ev_min_a: 6
+        ev_max_a: 16
+
+        car_state_raw: "{{ states(ev_carconnected_entity) }}"
+        car_state: "{{ (car_state_raw | lower) if car_state_raw not in ['unknown','unavailable','none',''] else '' }}"
+        car_sensor_ok: "{{ car_state != '' }}"
+        car_is_ready_now: "{{ car_sensor_ok and car_state == 'ready' }}"
+        car_is_charging_now: "{{ car_sensor_ok and car_state == 'charging' }}"
+
+        car_state_changed: >-
+          {{ trigger.platform == 'state'
+             and trigger.entity_id == ev_carconnected_entity }}
+
+        ev_just_became_ready: >-
+          {{ car_state_changed
+             and trigger.to_state is not none
+             and (trigger.to_state.state | lower) == 'ready' }}
+
+        ev_start_button_available: >-
+          {{ ev_enabled and states(ev_start_button) not in ['unknown','unavailable','none',''] }}
+
+        # Fallback retry: READY for >2 minutes (only on time tick)
+        ready_for_2m: >-
+          {% if not (ev_enabled and car_sensor_ok and car_is_ready_now) %}
+            false
+          {% else %}
+            {% set last = states[ev_carconnected_entity].last_changed %}
+            {{ (as_timestamp(now()) - as_timestamp(last)) >= 120 }}
+          {% endif %}
+
+        fallback_retry_now: >-
+          {{ trigger.platform == 'time_pattern'
+             and ev_start_button_available
+             and ready_for_2m
+             and (not car_is_charging_now) }}
+
+        # EV limit/ramp
+        ev_should_step_down: "{{ ev_available and (overcurrent or overimport) and ev_cur_a > ev_min_a }}"
+        ev_new_down_a: "{{ [ev_min_a, (ev_cur_a - 1)] | max }}"
+
+        ev_ramp_ok: >-
+          {{ ev_available
+             and (not overcurrent) and (not overimport)
+             and i_max is not none and i_max < (max_phase_a - 2)
+             and p_grid < (max_import_w - 1500) }}
+
+        ev_should_ramp_up: "{{ ev_ramp_ok and ev_cur_a < ev_max_a }}"
+        ev_new_up_a: "{{ [ev_max_a, (ev_cur_a + 1)] | min }}"
+        ev_auth_button: "button.wattpilot_authenticate"
+        ev_auth_button_available: >-
+          {{ ev_enabled and states(ev_auth_button) not in ['unknown','unavailable','none',''] }}
+
+    # ------------------------------------------------------------
+    # 1) Decide/maintain NIGHT LATCH
+    #    - only decide ON/OFF when night JUST started
+    #    - keep latch as-is during the night (until night-end reset clears it)
+    # ------------------------------------------------------------
+    - choose:
+        - conditions: "{{ night_just_started }}"
+          sequence:
+            - choose:
+                - conditions: "{{ never_charge }}"
+                  sequence:
+                    - service: input_boolean.turn_off
+                      target:
+                        entity_id: input_boolean.cap_night_charge_active
+                - conditions: "{{ soc < start_pct }}"
+                  sequence:
+                    - service: input_boolean.turn_on
+                      target:
+                        entity_id: input_boolean.cap_night_charge_active
+              default:
+                - service: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.cap_night_charge_active
+      default: []
+
+    # Re-evaluate latch_on after possible change above
+    - variables:
+        latch_on: "{{ is_state('input_boolean.cap_night_charge_active', 'on') }}"
+
+    # ------------------------------------------------------------
+    # 2) EV START (night start OR becomes ready OR fallback retry)
+    #    House B: authenticate is required before start
+    # ------------------------------------------------------------
+    - choose:
+        - conditions: >-
+            {{ (night_just_started or ev_just_became_ready or fallback_retry_now)
+               and ev_start_button_available }}
+          sequence:
+            - choose:
+                - conditions: "{{ ev_auth_button_available }}"
+                  sequence:
+                    - service: button.press
+                      target:
+                        entity_id: "{{ ev_auth_button }}"
+                    - delay: "00:00:02"
+              default: []
+            - service: button.press
+              target:
+                entity_id: "{{ ev_start_button }}"
+      default: []
+    # ------------------------------------------------------------
+    # 3) BATTERY CONTROL (only when latch_on)
+    #    Stop at soc_target and HOLD (power_w=1) to prevent discharge
+    # ------------------------------------------------------------
+    - choose:
+        - conditions: "{{ latch_on }}"
+          sequence:
+            - choose:
+                # A) Reached target -> HOLD (don’t keep charging to 100)
+                - conditions: "{{ soc >= soc_target }}"
+                  sequence:
+                    - service: script.battery_set_power_target
+                      data:
+                        power_w: "{{ battery_neutral_w }}"
+
+              default:
+                # B) Overload/no headroom -> HOLD
+                - choose:
+                    - conditions: "{{ overcurrent or overimport or batt_target_w == 0 }}"
+                      sequence:
+                        - service: script.battery_set_power_target
+                          data:
+                            power_w: "{{ battery_neutral_w }}"
+                  default:
+                    # C) Otherwise force charge within headroom/limits
+                    - service: script.battery_set_power_target
+                      data:
+                        power_w: "{{ batt_target_w }}"
+      default: []
+
+    # ------------------------------------------------------------
+    # 4) EV CURRENT LIMIT/RAMP (optional)
+    # ------------------------------------------------------------
+    - choose:
+        - conditions: "{{ ev_should_step_down }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "{{ ev_current_entity }}"
+              data:
+                value: "{{ ev_new_down_a | int }}"
+        - conditions: "{{ ev_should_ramp_up }}"
+          sequence:
+            - service: number.set_value
+              target:
+                entity_id: "{{ ev_current_entity }}"
+              data:
+                value: "{{ ev_new_up_a | int }}"
+      default: []
+

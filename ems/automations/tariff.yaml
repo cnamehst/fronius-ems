@@ -1,47 +1,63 @@
 - alias: "Tariff: Update nightprice/dayprice based on schedule"
   id: tariff_schedule_controller
   mode: restart
-  triggers:
-    - trigger: time_pattern
+  trigger:
+    - platform: time_pattern
       minutes: "/1"
-    - trigger: state
+    - platform: state
       entity_id:
         - input_select.tariff_mode
         - input_datetime.tariff_day_start
         - input_datetime.tariff_day_end
-  actions:
+
+  action:
     - variables:
         mode: "{{ states('input_select.tariff_mode') }}"
-        now_time: "{{ now().strftime('%H:%M') }}"
-        day_start: "{{ states('input_datetime.tariff_day_start') }}"
-        day_end: "{{ states('input_datetime.tariff_day_end') }}"
-        is_nightprice: >
-          {% if mode == 'Force nightprice' %}
+        s: "{{ states('input_datetime.tariff_day_start') }}"
+        e: "{{ states('input_datetime.tariff_day_end') }}"
+
+        now_ts: "{{ as_timestamp(now()) }}"
+
+        start_ts: >-
+          {% if s in ['unknown','unavailable','none','None',''] %}
+            {{ none }}
+          {% else %}
+            {{ as_timestamp(today_at(s)) }}
+          {% endif %}
+
+        end_ts: >-
+          {% if e in ['unknown','unavailable','none','None',''] %}
+            {{ none }}
+          {% else %}
+            {{ as_timestamp(today_at(e)) }}
+          {% endif %}
+
+        is_day: >-
+          {% if mode == 'Force dayprice' %}
             true
-          {% elif mode == 'Force dayprice' %}
+          {% elif mode == 'Force nightprice' %}
+            false
+          {% elif start_ts is none or end_ts is none %}
             false
           {% else %}
-            {# Auto mode - check time range #}
-            {% if day_start in ['unavailable','unknown','none',''] or day_end in ['unavailable','unknown','none',''] %}
-              false
+            {% if start_ts < end_ts %}
+              {{ now_ts >= start_ts and now_ts < end_ts }}
             {% else %}
-              {# Night is when current time is NOT between day_start and day_end #}
-              {% if day_start < day_end %}
-                {# Normal case: day_start=06:00, day_end=22:00 -> night is outside this range #}
-                {{ now_time < day_start or now_time >= day_end }}
-              {% else %}
-                {# Wraps midnight: day_start=22:00, day_end=06:00 -> night is between these #}
-                {{ now_time >= day_start or now_time < day_end }}
-              {% endif %}
+              {# Wrap midnight #}
+              {{ now_ts >= start_ts or now_ts < end_ts }}
             {% endif %}
           {% endif %}
+
+        is_nightprice: "{{ not is_day }}"
+
     - choose:
         - conditions: "{{ is_nightprice and is_state('input_boolean.cap_nightprice_active', 'off') }}"
           sequence:
             - service: input_boolean.turn_on
               target:
                 entity_id: input_boolean.cap_nightprice_active
-        - conditions: "{{ not is_nightprice and is_state('input_boolean.cap_nightprice_active', 'on') }}"
+
+        - conditions: "{{ (not is_nightprice) and is_state('input_boolean.cap_nightprice_active', 'on') }}"
           sequence:
             - service: input_boolean.turn_off
               target:

@@ -1,6 +1,25 @@
+
+# fronius-ems v1.0.1 — Release Notes
+**Release data:** 2026-01-18
+**Sttus:** Second release after a week with a new fresh install in another house. New honeassistant,
+
+Lots of adjustments to fit this house with remote heating, EV and a house battery with 27.5kWh
+
+
+## 🎯 What this release is about
+
+Version **1.0.1** this system is
+
+- Adapted for EV use, wattpilot with NFC tags. Night charge will happen at nightprice start
+  - If tag is used during dayprice, a charge at 10A will start and at the same time turn on "CAP MODE" to have some import
+  - Will turn off EV charging at EMS: Cap SoC start (%) as a safeguard, to be able to take care of house usage not to hit high power tariffs
+- Fixed oscilation during night, smaller steps at inc/decrease battery charge and EV charge, no large jumps from 0->5000w any more
+
+Dashboard might need some updating, thats not included in this release.
+
 # fronius-ems v1.0.0 — Release Notes
 
-**Release date:** 2026-01-09  
+**Release date:** 2026-01-09
 **Status:** First stable release for new installations
 
 This is the first *stable* release of **fronius-ems**, designed to be installed on a clean Home Assistant system and used as the primary Energy Management System (EMS) for Fronius GEN24–based homes.

@@ -7,3 +7,8 @@ tariff_day_end:
   name: Tariff day ends
   has_date: false
   has_time: true
+
+ems_last_batt_target_ts:
+  name: "EMS: last battery target timestamp"
+  has_date: true
+  has_time: true

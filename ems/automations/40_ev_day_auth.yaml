@@ -1,0 +1,68 @@
+# ============================================
+# EMS - EV DAYPRICE AUTH (power-based detection)
+# ============================================
+
+- id: ems_ev_dayprice_auth_set_10a_once
+  alias: "EMS: EV dayprice start (power>100W) -> set 10A once"
+  description: >
+    When EV charging starts during dayprice (power rises above 100W), set EV current
+    to 10A once and latch a 'session' so user can manually increase later without
+    us overriding.
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.wattpilot_charging_power
+      above: 100
+      for: "00:01:00"
+  conditions:
+    - condition: state
+      entity_id: binary_sensor.electricity_dayprice_active
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.ems_ev_day_auth_active
+      state: "off"
+  actions:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.ems_ev_day_auth_active
+
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ (states('number.wattpilot_max_charging_current') | int(0)) != 10 }}"
+          sequence:
+            - action: number.set_value
+              target:
+                entity_id: number.wattpilot_max_charging_current
+              data:
+                value: 10
+
+
+- id: ems_ev_dayprice_release_cap_on_low_power
+  alias: "EMS: EV low power -> release cap + clear day-auth"
+  description: >
+    If EV charging power stays below 100W for 2 minutes during dayprice,
+    release cap modes and clear the day-auth latch.
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.wattpilot_charging_power
+      below: 100
+      for: "00:02:00"
+  conditions:
+    - condition: state
+      entity_id: binary_sensor.electricity_dayprice_active
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.ems_ev_day_auth_active
+      state: "on"
+  actions:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.ems_ev_day_auth_active
+
+    - action: input_boolean.turn_off
+      target:
+        entity_id:
+          - input_boolean.cap_force_mode
+          - input_boolean.grid_cap_mode

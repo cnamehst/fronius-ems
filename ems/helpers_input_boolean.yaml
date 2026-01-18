@@ -14,6 +14,7 @@ cap_night_never_charge:
   name: "EMS: never charge during night (summer mode)"
   icon: mdi:weather-sunny-off
 
+# TOOD check if this can be removed
 cap_night_charge_active:
   name: "EMS: night charge active this night"
   icon: mdi:battery-clock
@@ -26,7 +27,10 @@ cap_force_mode:
   name: "EMS: force cap mode ON (manual)"
   icon: mdi:flash-alert
 
-ems_ev_enabled:
-  name: "EMS: EV control enabled (Wattpilot)"
-  icon: mdi:ev-station
-  initial: false
+ev_control_enabled:
+  name: "EMS: EV control enabled"
+  icon: mdi:car-electric
+
+ems_ev_day_auth_active:
+  name: "EMS EV day auth active"
+  icon: mdi:key-wireless

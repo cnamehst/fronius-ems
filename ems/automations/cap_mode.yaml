@@ -1,8 +1,12 @@
+# ============================================
+# EMS - CAP MODE (DAYPRICE ONLY)
+# ============================================
+
 - alias: "EMS: grid cap mode state (SoC hysteresis, dayprice only)"
   id: ems_cap_mode_state
   mode: single
-  triggers:
-    - trigger: state
+  trigger:
+    - platform: state
       entity_id:
         - sensor.ems_battery_soc
         - input_boolean.cap_nightprice_active
@@ -10,7 +14,8 @@
         - input_boolean.cap_enabled
         - input_boolean.cap_manual_override
         - input_boolean.cap_force_mode
-  actions:
+
+  action:
     - variables:
         soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
         start_pct: "{{ states('input_number.cap_soc_start_pct') | float(0) }}"
@@ -21,125 +26,208 @@
         enabled: "{{ is_state('input_boolean.cap_enabled', 'on') }}"
         override: "{{ is_state('input_boolean.cap_manual_override', 'on') }}"
         force_mode: "{{ is_state('input_boolean.cap_force_mode', 'on') }}"
+
     - choose:
-        # Turn ON cap mode if: force mode OR (automatic conditions)
         - conditions: >
             {{ not cap_on and enabled and not override and dayprice_active and
                (force_mode or soc < start_pct) }}
           sequence:
             - service: input_boolean.turn_on
-              target: { entity_id: input_boolean.grid_cap_mode }
+              target:
+                entity_id: input_boolean.grid_cap_mode
 
-        # Turn OFF cap mode if: NOT forced AND (normal off conditions)
         - conditions: >
             {{ cap_on and not force_mode and
                (soc > reset_pct or not dayprice_active or not enabled or override) }}
           sequence:
             - service: input_boolean.turn_off
-              target: { entity_id: input_boolean.grid_cap_mode }
+              target:
+                entity_id: input_boolean.grid_cap_mode
+
 
 - alias: "EMS: reset battery when force cap mode disabled"
   id: ems_reset_on_force_cap_off
   mode: single
-  triggers:
-    - trigger: state
+  trigger:
+    - platform: state
       entity_id: input_boolean.cap_force_mode
       from: "on"
       to: "off"
-  actions:
+
+  action:
     - service: script.battery_reset_charging_5_int
     - service: logbook.log
       data:
         name: EMS Force Cap Mode
         message: "Force cap mode disabled - reset battery to Fronius control"
 
-- alias: "EMS: cap controller (keep grid import at target)"
-  id: ems_cap_controller
+
+# ============================================
+# CAP CONTROLLER v3 (idempotent, stable)
+# Goal: keep grid import near target by commanding battery power.
+# Sign convention:
+#   script.battery_set_power_target: +W = discharge, -W = charge
+#   sensor.ems_grid_power: +W = import
+# ============================================
+- alias: "EMS: cap controller (keep grid import at target) [v4 PI]"
+  id: ems_cap_controller_v4
   mode: restart
-  triggers:
-    - trigger: time_pattern
+  trigger:
+    - platform: time_pattern
       seconds: "/10"
       id: loop
-    - trigger: state
+    - platform: state
       entity_id: input_boolean.grid_cap_mode
       to: "off"
       id: cap_off
-    - trigger: state
+    - platform: state
       entity_id: input_boolean.grid_cap_mode
       to: "on"
       id: cap_on
+    - platform: state
+      entity_id:
+        - input_number.cap_import_target_w
+        - sensor.ems_grid_power
+        - sensor.ems_battery_soc
+      id: state
+
   variables:
+    # Tuning
     import_target: "{{ states('input_number.cap_import_target_w') | float(1500) }}"
-    k_gain: 0.3
-    grid_deadband: 500
+    k_p: 0.6
+    k_i: 0.25
+    grid_deadband: 200
+    min_step: 200
+    max_change_per_cycle: 1200
+
+    # Limits
     max_discharge: 5600
     max_charge: 5600
-    min_step: 500
-    max_change_per_cycle: 1500
-    soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+
+    # GEN24-friendly neutral
+    battery_neutral_w: 1
+
+    # SoC guards
+    soc: "{{ states('sensor.ems_battery_soc') | float(none) }}"
+    soc_min: 5
+    soc_max: 95
+
+    # State
     cap_on: "{{ is_state('input_boolean.grid_cap_mode', 'on') }}"
-    grid_power: "{{ states('sensor.ems_grid_power') | float(0) }}"
-    batt_power: "{{ states('sensor.ems_battery_power') | float(0) }}"
-    grid_error: "{{ (grid_power - import_target) | float(0) }}"
-    desired_power_raw: >-
-      {% set err = grid_error | float(0) %}
-      {% if (err | abs) < grid_deadband %}
-        {{ batt_power }}
+    nightprice: "{{ is_state('input_boolean.cap_nightprice_active', 'on') }}"
+
+    # Measurements
+    grid_power: "{{ states('sensor.ems_grid_power') | float(none) }}"
+
+    # Last command memory
+    last_target: "{{ states('input_number.ems_last_batt_target_w') | float(0) }}"
+    last_ts: "{{ as_timestamp(states('input_datetime.ems_last_batt_target_ts')) | float(none) }}"
+    now_ts: "{{ as_timestamp(now()) }}"
+    last_recent: "{{ last_ts is not none and (now_ts - last_ts) < 5 }}"
+
+    valid_inputs: >-
+      {{ grid_power is not none
+         and soc is not none
+         and (grid_power | abs) <= 40000 }}
+
+    grid_error: >-
+      {% if not valid_inputs %}
+        {{ none }}
       {% else %}
-        {{ batt_power + k_gain * err }}
+        {{ (grid_power - import_target) | float(0) }}
       {% endif %}
-    desired_power_clamped: >-
-      {% set p = desired_power_raw | float(0) %}
-      {% set max_dis = max_discharge | float(0) %}
-      {% set max_ch  = max_charge    | float(0) %}
-      {% set min_step_val = min_step | float(0) %}
-      {# SoC protection: don't discharge below 5% #}
-      {% if soc <= 5 and p > 0 %}
-        {% set p = 0 %}
-      {% endif %}
-      {# SoC protection: don't charge above 95% #}
-      {% if soc >= 95 and p < 0 %}
-        {% set p = 0 %}
-      {% endif %}
-      {# Clamp to physical limits #}
-      {% if p > max_dis %}
-        {% set p = max_dis %}
-      {% elif p < (0 - max_ch) %}
-        {% set p = 0 - max_ch %}
-      {% endif %}
-      {# Ignore very small changes to avoid twitching #}
-      {% if (p - batt_power) | abs < min_step_val %}
-        {{ batt_power | round(0) }}
+
+    desired_raw: >-
+      {% if grid_error is none %}
+        {{ none }}
       {% else %}
-        {# Rate limit: don't change too fast #}
-        {% set delta = p - batt_power %}
-        {% set max_delta = max_change_per_cycle | float(1500) %}
-        {% if delta > max_delta %}
-          {{ (batt_power + max_delta) | round(0) }}
-        {% elif delta < (0 - max_delta) %}
-          {{ (batt_power - max_delta) | round(0) }}
+        {{ (last_target + (k_i * grid_error) + (k_p * grid_error)) | float(0) }}
+      {% endif %}
+
+    desired_clamped: >-
+      {% if desired_raw is none %}
+        {{ none }}
+      {% else %}
+        {% set p = desired_raw | float(0) %}
+
+        {# Within deadband: HOLD last target (don’t drop to 0) #}
+        {% if (grid_error | abs) < grid_deadband %}
+          {% set p = last_target | float(0) %}
+        {% endif %}
+
+        {# SoC protection #}
+        {% if soc <= soc_min and p > 0 %}
+          {% set p = battery_neutral_w %}
+        {% endif %}
+        {% if soc >= soc_max and p < 0 %}
+          {% set p = battery_neutral_w %}
+        {% endif %}
+
+        {# Clamp to limits #}
+        {% if p > max_discharge %}
+          {% set p = max_discharge %}
+        {% elif p < (0 - max_charge) %}
+          {% set p = 0 - max_charge %}
+        {% endif %}
+
+        {{ p | round(0) }}
+      {% endif %}
+
+    desired_rate_limited: >-
+      {% if desired_clamped is none %}
+        {{ none }}
+      {% else %}
+        {% set p = desired_clamped | float(0) %}
+        {% set last = last_target | float(0) %}
+        {% set delta = p - last %}
+        {% if delta > max_change_per_cycle %}
+          {{ (last + max_change_per_cycle) | round(0) }}
+        {% elif delta < (0 - max_change_per_cycle) %}
+          {{ (last - max_change_per_cycle) | round(0) }}
         {% else %}
           {{ p | round(0) }}
         {% endif %}
       {% endif %}
-  actions:
+
+    should_send: >-
+      {% if desired_rate_limited is none %}
+        false
+      {% else %}
+        {{ ((desired_rate_limited | float(0)) - (last_target | float(0))) | abs >= min_step
+           and not last_recent }}
+      {% endif %}
+
+  action:
     - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ trigger.id == 'cap_off' }}"
+        - conditions: "{{ trigger.id == 'cap_off' }}"
           sequence:
             - service: script.battery_set_power_target
               data:
                 power_w: 0
+            - service: input_number.set_value
+              target: { entity_id: input_number.ems_last_batt_target_w }
+              data: { value: 0 }
+            - service: input_datetime.set_datetime
+              target: { entity_id: input_datetime.ems_last_batt_target_ts }
+              data:
+                timestamp: "{{ now_ts | int }}"
+
         - conditions:
             - condition: template
-              value_template: "{{ cap_on and trigger.id in ['loop', 'cap_on'] }}"
+              value_template: "{{ cap_on and not nightprice }}"
             - condition: template
-              value_template: "{{ states('sensor.ems_battery_power') not in ['unavailable', 'unknown', 'none'] }}"
+              value_template: "{{ valid_inputs }}"
             - condition: template
-              value_template: "{{ states('sensor.ems_grid_power') not in ['unavailable', 'unknown', 'none'] }}"
+              value_template: "{{ should_send }}"
           sequence:
             - service: script.battery_set_power_target
               data:
-                power_w: "{{ desired_power_clamped | int }}"
+                power_w: "{{ desired_rate_limited | int }}"
+            - service: input_number.set_value
+              target: { entity_id: input_number.ems_last_batt_target_w }
+              data: { value: "{{ desired_rate_limited | int }}" }
+            - service: input_datetime.set_datetime
+              target: { entity_id: input_datetime.ems_last_batt_target_ts }
+              data:
+                timestamp: "{{ now_ts | int }}"
       default: []

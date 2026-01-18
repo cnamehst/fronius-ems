@@ -1,0 +1,61 @@
+# ============================================
+# EMS - NIGHT END RESET (authoritative)
+# ============================================
+
+- id: ems_night_end_reset
+  alias: "EMS: night ends -> stop night charging + reset battery"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_boolean.cap_nightprice_active
+      from: "on"
+      to: "off"
+
+  action:
+    - variables:
+        soc: "{{ states('sensor.ems_battery_soc') | float(0) }}"
+        grid_w: "{{ states('sensor.ems_grid_power') | float(0) }}"
+        msg: >-
+          Night ended → EMS handover complete.
+          Battery SoC: {{ soc | round(1) }} %
+          Grid power: {{ grid_w | round(0) }} W
+          (Night charging stopped, battery reset to Fronius control)
+
+    # Always clear the "this night we charge" latch
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.cap_night_charge_active
+
+    # Neutralize any forcing (safe)
+    # Use 0 if you want Fronius to manage freely at day start
+    - service: script.battery_set_power_target
+      data:
+        power_w: 0
+
+    # Reset GEN24 charge/discharge registers to normal Fronius control
+    - service: script.battery_reset_charging_5_int
+
+    # Logbook (kept for timeline/history)
+    - service: logbook.log
+      data:
+        name: EMS
+        message: "{{ msg }}"
+
+    # Persistent notification (never disappears in noise)
+    - service: persistent_notification.create
+      data:
+        title: "EMS night → day handover"
+        message: "{{ msg }}"
+        notification_id: "ems_night_end_handover"
+
+    # Optional normal notification (mobile / desktop)
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ has_service('notify', 'notify') }}"
+          sequence:
+            - service: notify.notify
+              data:
+                title: "EMS night → day handover"
+                message: "{{ msg }}"
+      default: []
