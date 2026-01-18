@@ -1,0 +1,174 @@
+title: EMS
+views:
+  - title: EMS
+    path: ems
+    icon: mdi:flash
+    cards:
+      - type: entities
+        title: EMS Status & Control
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.cap_enabled
+            name: EMS enabled
+          - entity: input_boolean.grid_cap_mode
+            name: Cap mode active
+          - entity: input_boolean.cap_night_never_charge
+            name: Summer mode (never night charge)
+          - entity: input_boolean.cap_manual_override
+            name: Manual override (disable cap)
+      - type: entities
+        title: Tariff
+        show_header_toggle: false
+        entities:
+          - entity: input_select.tariff_mode
+            name: Tariff mode
+          - entity: input_datetime.tariff_day_start
+            name: Day starts
+          - entity: input_datetime.tariff_day_end
+            name: Day ends
+          - entity: binary_sensor.electricity_dayprice_active
+            name: Dayprice active
+          - entity: binary_sensor.electricity_nightprice_active
+            name: Nightprice active
+      - type: entities
+        title: Safety / Sensor Health
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.ems_phase_sensors_ok
+            name: Phase sensors OK
+          - entity: sensor.ems_grid_current_l1
+            name: Phase L1 current (A)
+          - entity: sensor.ems_grid_current_l2
+            name: Phase L2 current (A)
+          - entity: sensor.ems_grid_current_l3
+            name: Phase L3 current (A)
+      - type: entities
+        title: Live Power
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ems_battery_soc
+            name: Battery SoC (%)
+          - entity: sensor.ems_grid_power_w
+            name: Grid power (W)
+          - entity: sensor.ems_pv_power_w
+            name: PV power (W)
+          - entity: sensor.ems_battery_power_w
+            name: Battery power (W)
+      - type: entities
+        title: Energy Totals (for Energy Dashboard)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ems_grid_import_energy_total_kwh
+            name: Grid import total (kWh)
+          - entity: sensor.ems_pv_energy_total_kwh
+            name: PV lifetime total (kWh)
+      - type: markdown
+        title: Notes
+        content: >
+          **Sign convention (typical):**
+
+          - Grid power: + = import, - = export (depending on your meter config)
+
+          - Battery power: + = discharge, - = charge (depends on register
+          mapping)
+
+
+          If any phase sensor becomes `unavailable`, EMS safety logic should
+          avoid comparing invalid values.
+cards:
+  - type: custom:power-flow-card-plus
+    entities:
+      battery:
+        entity: sensor.ems_battery_power
+        state_of_charge: sensor.ems_battery_soc
+        invert_state: false
+      grid:
+        entity: sensor.ems_grid_power
+        secondary_info: {}
+      solar:
+        entity: sensor.ems_pv_power
+        display_zero_state: true
+        secondary_info: {}
+        display_zero: true
+        display_zero_tolerance: 100
+      individual:
+        - entity: sensor.wattpilot_charging_power
+          secondary_info: {}
+          icon: mdi:ev-station
+          name: Bil
+    clickable_entities: true
+    display_zero_lines:
+      mode: show
+      transparency: 50
+      grey_color:
+        - 189
+        - 189
+        - 189
+    use_new_flow_rate_model: true
+    w_decimals: 0
+    kw_decimals: 1
+    min_flow_rate: 0.75
+    max_flow_rate: 6
+    max_expected_power: 16000
+    min_expected_power: 0.01
+    watt_threshold: 3000
+    transparency_zero_lines: 0
+    sort_individual_devices: true
+    disable_dots: false
+  - type: vertical-stack
+    cards:
+      - type: custom:mushroom-title-card
+        title: EMS Status
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.cap_enabled
+        name: EMS enabled
+        icon_color: green
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.cap_nightprice_active
+        name: Nightprice active
+        icon_color: purple
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.grid_cap_mode
+        name: Cap mode active
+        icon_color: orange
+      - type: custom:mushroom-entity-card
+        entity: sensor.wattpilot_carconnected
+        name: Car connected
+        icon_color: yellow
+      - type: custom:mushroom-entity-card
+        entity: sensor.wattpilot_charging_power
+        name: EV Charging power
+        icon_color: yellow
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.cap_night_never_charge
+        name: Summer mode (never night charge)
+        icon_color: amber
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.cap_manual_override
+        name: Manual override (disable cap)
+        icon_color: red
+      - type: custom:mushroom-entity-card
+        entity: input_select.ems_season
+        name: EMS Season
+      - type: custom:mushroom-entity-card
+        entity: binary_sensor.ems_phase_sensors_ok
+        name: Phase sensors OK
+        icon_color: green
+      - type: custom:mushroom-entity-card
+        entity: sensor.ems_battery_soc
+        name: Battery SoC
+        icon_color: green
+      - type: custom:mushroom-entity-card
+        entity: sensor.ems_grid_power
+        name: Grid power
+        icon_color: blue
+badges:
+  - type: entity
+    show_name: false
+    show_state: true
+    show_icon: true
+    entity: sensor.ems_grid_current_l1
+  - type: entity
+    entity: sensor.ems_grid_current_l2
+  - type: entity
+    entity: sensor.ems_grid_current_l3

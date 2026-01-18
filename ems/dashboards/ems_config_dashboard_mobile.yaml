@@ -1,20 +1,20 @@
-title: EMS - Configuration
-path: ems-config
-icon: mdi:tune
-theme: null
-type: sections
-max_columns: 3
-sections:
-  - type: grid
+title: EMS - Configuration (Mobile)
+path: ems-config-mobile
+icon: mdi:cellphone
+type: panel
+cards:
+  - type: vertical-stack
     cards:
       - type: markdown
         content: >
-          ## EMS – Configuration
+          ## EMS – Configuration (Mobile)
 
-          Tune thresholds and behavior.  
+          Tune thresholds and behavior.
 
-          Day/night tariff switching is controlled by:
-          `input_boolean.cap_nightprice_active`
+          **Tariff status**
+          - Dayprice: `binary_sensor.electricity_dayprice_active`
+          - Nightprice: `binary_sensor.electricity_nightprice_active`
+
       - type: entities
         title: Global controls
         show_header_toggle: false
@@ -25,7 +25,7 @@ sections:
             name: Season preset
           - entity: input_boolean.cap_manual_override
             name: Manual override (disable cap)
-          - entity: input_boolean.ev_control_enabled
+
       - type: entities
         title: Tariff schedule
         show_header_toggle: false
@@ -36,8 +36,11 @@ sections:
             name: Dayprice starts at
           - entity: input_datetime.tariff_day_end
             name: Dayprice ends at
-          - entity: input_boolean.cap_nightprice_active
-            name: Nightprice active (status)
+          - entity: binary_sensor.electricity_dayprice_active
+            name: Dayprice active
+          - entity: binary_sensor.electricity_nightprice_active
+            name: Nightprice active
+
       - type: entities
         title: Day / cap mode tuning
         show_header_toggle: false
@@ -48,33 +51,34 @@ sections:
             name: SoC stop/reset cap (%)
           - entity: input_number.cap_import_target_w
             name: Import target (W)
+          - entity: input_boolean.grid_cap_mode
+            name: Cap mode active (read-only)
+
       - type: history-graph
         title: Day tuning context (last 12h)
         hours_to_show: 12
         refresh_interval: 60
         entities:
-          - entity: sensor.ems_grid_power
+          - entity: sensor.ems_grid_power_w
             name: Grid
           - entity: sensor.ems_battery_soc
             name: SoC
-  - type: grid
-    cards:
+
       - type: entities
-        title: Logics incl Winter logic
+        title: Night charging / season logic
         show_header_toggle: false
         entities:
-          - entity: input_boolean.cap_force_mode
-            name: Force cap mode ON (manual)
-          - entity: input_boolean.grid_cap_mode
-            name: Cap mode active (read-only)
           - entity: input_boolean.cap_night_never_charge
             name: Summer mode (never night charge)
+          - entity: input_boolean.cap_night_charge_active
+            name: Night charge active (read-only)
           - entity: input_number.cap_night_soc_start_pct
             name: Winter threshold at night start (%)
           - entity: input_number.cap_night_soc_target_pct
             name: Night charge target (%)
           - entity: input_number.cap_night_charge_power_w
             name: Night charge power (W)
+
       - type: history-graph
         title: Night charging context (last 24h)
         hours_to_show: 24
@@ -82,10 +86,9 @@ sections:
         entities:
           - entity: sensor.ems_battery_soc
             name: SoC
-          - entity: sensor.ems_grid_power
+          - entity: sensor.ems_grid_power_w
             name: Grid
-  - type: grid
-    cards:
+
       - type: entities
         title: Fuse protection / limits (night)
         show_header_toggle: false
@@ -100,12 +103,14 @@ sections:
             name: L2 current
           - entity: sensor.ems_grid_current_l3
             name: L3 current
+
       - type: button
         name: Reset battery to automatic
         icon: mdi:home-battery
         tap_action:
           action: call-service
           service: script.battery_reset_charging_5_int
+
       - type: history-graph
         title: Fuse protection context (last 6h)
         hours_to_show: 6
@@ -117,4 +122,3 @@ sections:
             name: L2
           - entity: sensor.ems_grid_current_l3
             name: L3
-cards: []

@@ -1,0 +1,20 @@
+type: sections
+max_columns: 4
+title: EV
+path: ev
+icon: mdi:ev-plug-ccs2
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: New section
+      - type: entities
+        entities:
+          - entity: number.wattpilot_max_charging_current
+          - entity: button.wattpilot_start_charging_force
+          - entity: button.wattpilot_stop_charging
+          - entity: sensor.wattpilot_charging_power
+          - entity: sensor.wattpilot_carconnected
+          - entity: button.wattpilot_authenticate
+        title: Wattpilot_32454414
+cards: []
